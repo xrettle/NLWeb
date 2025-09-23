@@ -2,7 +2,7 @@
 # Core dependencies only - add others as needed
 
 # Web framework
-aiohttp==3.9.1
+aiohttp==3.12.14
 aiohttp-cors==0.7.0
 
 # Essential dependencies
