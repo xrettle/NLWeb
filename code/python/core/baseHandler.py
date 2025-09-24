@@ -104,7 +104,10 @@ class NLWebHandler:
 
         # should we just list the results or try to summarize the results or use the results to generate an answer
         # Valid values are "none","summarize" and "generate"
-        self.generate_mode = get_param(query_params, "generate_mode", str, "none")
+        # Look for 'mode' first (new convention), fall back to 'generate_mode' for backward compatibility
+        self.generate_mode = get_param(query_params, "mode", str, None)
+        if self.generate_mode is None:
+            self.generate_mode = get_param(query_params, "generate_mode", str, "none")
 
         # Minimum score threshold for ranking - results below this score will be filtered out
         self.min_score = get_param(query_params, "min_score", int, 51)
@@ -216,6 +219,9 @@ class NLWebHandler:
             query_params["generate_mode"] = [content.get('mode', 'list')]
             if content.get('prev_queries'):
                 query_params["prev"] = [json.dumps(content['prev_queries'])]
+            # Extract db parameter if present in content
+            if content.get('db'):
+                query_params["db"] = [content.get('db')]
         else:
             # Plain string content (fallback)
             query_params["query"] = [str(content)]
