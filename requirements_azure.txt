@@ -2,7 +2,7 @@
 # Core dependencies only - add others as needed
 
 # Web framework
-aiohttp==3.9.1
+aiohttp==3.12.14
 aiohttp-cors==0.7.0
 
 # Essential dependencies
@@ -27,6 +27,6 @@ openai==1.6.1
 # pandas==2.0.3  # Only if doing data processing
 
 # Smaller alternatives
-requests==2.31.0  # Instead of httpx
+requests==2.32.4  # Instead of httpx
 # Use JSON instead of pandas for data processing
 # Use lists instead of numpy arrays where possible
