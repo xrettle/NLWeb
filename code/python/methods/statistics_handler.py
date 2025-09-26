@@ -211,11 +211,11 @@ class StatisticsHandler():
         for (template_id, score, extracted_values) in results:
             template = next((t for t in self.templates if t['id'] == template_id), None)
             if template:
-                all_template_scores.append((score, template_id, template['pattern']))
+                all_template_scores.append((score, template_id, template['pattern'], extracted_values))
         
         all_template_scores.sort(reverse=True)
-        for i, (score, tid, pattern) in enumerate(all_template_scores[:3]):
-            print(f"  {i+1}. Template {tid}: {score} - '{pattern}'")
+        for i, (score, tid, pattern, extracted_values) in enumerate(all_template_scores[:3]):
+            print(f"  {i+1}. Template {tid}: {score} - '{pattern}' '{extracted_values}'")
         
         return matched_templates
     
@@ -474,9 +474,9 @@ class StatisticsHandler():
             if not variable_dcids:
                 print(f"  Template {template['id']} - Skipping - no variables extracted")
                 return None
-            
-            # Default to US if no places extracted for correlation queries
-            if not place_dcids and query_type in ['correlation', 'comparison', 'ranking']:
+
+            # Default to US if no places extracted
+            if not place_dcids:
                 place_dcids = ['country/USA']
                 print(f"  Template {template['id']} - Defaulting to US for place")
             

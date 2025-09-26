@@ -594,10 +594,12 @@ export class UnifiedChatInterface {
     if (this.state.selectedSite === 'conv_history') {
       message.search_all_users = searchAllUsers;
     }
-    
-    // Add any additional URL parameters
-    Object.assign(message, this.additionalParams);
-    
+
+    // Add any additional URL parameters to the content field
+    if (this.additionalParams) {
+      Object.assign(message.content, this.additionalParams);
+    }
+
     return message;
   }
   

@@ -628,57 +628,62 @@
           // Modify links to point to index.html with the site parameter
           // Look for the url field in the item (this contains the actual site domain)
           if (item.url) {
-            // Extract just the domain name from the URL
-            let siteDomain = item.url;
-            // Remove protocol if present
-            siteDomain = siteDomain.replace(/^https?:\/\//, '');
-            // Remove www. if present
-            siteDomain = siteDomain.replace(/^www\./, '');
-            // Remove trailing slash if present
-            siteDomain = siteDomain.replace(/\/$/, '');
-            
-            // Get the friendly name for display
-            const siteName = item.name || item.siteName || siteDomain;
-            
-            // Check if this is a Shopify store based on the @type field
-            // Don't rely on URL since Shopify stores can have custom domains
-            const isShopify = item['@type'] === 'ShopifyStore' || item.type === 'ShopifyStore';
-            
-            // Build the URL with parameters
-            let indexUrl = `/?site=${encodeURIComponent(siteDomain)}`;
+            // Check if the URL from backend is already a complete URL (e.g., to nlwm.azurewebsites.net)
+            // If so, use it directly without modification
+            let indexUrl;
+            const siteName = item.name || item.siteName || item.url;
 
-            // Add the current query (the one the user searched with)
-            const currentQuery = this.queryInput.value.trim();
-            if (currentQuery) {
-              indexUrl += `&query=${encodeURIComponent(currentQuery)}`;
-            }
+            if (item.url.startsWith('http://') || item.url.startsWith('https://')) {
+              // URL is already complete from backend - replace /ask? with /?
+              indexUrl = item.url.replace('/ask?', '/?');
+            } else {
+              // URL is just a domain - build local index URL
+              let siteDomain = item.url;
+              // Remove www. if present
+              siteDomain = siteDomain.replace(/^www\./, '');
+              // Remove trailing slash if present
+              siteDomain = siteDomain.replace(/\/$/, '');
 
-            // Add site-specific query if different from main query
-            if (item.query && item.query !== currentQuery) {
-              // Store site-specific query as a separate parameter
-              indexUrl += `&site_query=${encodeURIComponent(item.query)}`;
-            }
+              // Check if this is a Shopify store based on the @type field
+              // Don't rely on URL since Shopify stores can have custom domains
+              const isShopify = item['@type'] === 'ShopifyStore' || item.type === 'ShopifyStore';
 
-            // Add retrieval/backend parameter if needed
-            if (isShopify) {
-              // Add retrieval parameter to force Shopify MCP retrieval
-              indexUrl += '&retrieval=shopify';
-            }
+              // Build the URL with parameters
+              indexUrl = `/?site=${encodeURIComponent(siteDomain)}`;
 
-            // Add tool parameter to skip tool selection
-            indexUrl += '&tool=search';
+              // Add the current query (the one the user searched with)
+              const currentQuery = this.queryInput.value.trim();
+              if (currentQuery) {
+                indexUrl += `&query=${encodeURIComponent(currentQuery)}`;
+              }
 
-            // Add any database parameter if present
-            if (item.db || item.database) {
-              indexUrl += `&db=${encodeURIComponent(item.db || item.database)}`;
+              // Add site-specific query if different from main query
+              if (item.query && item.query !== currentQuery) {
+                // Store site-specific query as a separate parameter
+                indexUrl += `&site_query=${encodeURIComponent(item.query)}`;
+              }
+
+              // Add retrieval/backend parameter if needed
+              if (isShopify) {
+                // Add retrieval parameter to force Shopify MCP retrieval
+                indexUrl += '&retrieval=shopify';
+              }
+
+              // Add tool parameter to skip tool selection
+              indexUrl += '&tool=search';
+
+              // Add any database parameter if present
+              if (item.db || item.database) {
+                indexUrl += `&db=${encodeURIComponent(item.db || item.database)}`;
+              }
             }
 
             // Find all links in the element
             const links = itemElement.querySelectorAll('a');
             links.forEach(link => {
-              // If it's a link to the site, modify it to go to index.html
+              // If it's a link to the site, modify it
               if (link.href && !link.href.startsWith('mailto:') && !link.href.startsWith('tel:')) {
-                // Create new link to index.html with site parameter using the domain
+                // Use the URL we determined above
                 link.href = indexUrl;
                 link.target = '_blank'; // Open in new tab/window
                 link.title = `Open chat with ${siteName}`;

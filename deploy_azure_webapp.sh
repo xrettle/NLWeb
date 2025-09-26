@@ -64,6 +64,7 @@ rm -f $ZIP_FILE
 echo "Creating deployment zip file..."
 zip -r $ZIP_FILE . \
   -x "*.git*" \
+  -x "*.zip" \
   -x "node_modules/*" \
   -x "docs/*" \
   -x "code/logs/*" \
