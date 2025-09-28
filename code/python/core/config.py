@@ -355,6 +355,7 @@ class AppConfig:
             data = {
                 "port": 8080,
                 "static_directory": "./static",
+                "homepage": "static/index.html",
                 "server": {}
             }
         
@@ -362,6 +363,7 @@ class AppConfig:
         self.port: int = self._get_config_value(data.get("port"), 8080)
         self.static_directory: str = self._get_config_value(data.get("static_directory"), "./static")
         self.mode: str = self._get_config_value(data.get("mode"), "production")
+        self.homepage: str = self._get_config_value(data.get("homepage"), "static/index.html")
         
         # Keep static directory relative to config directory, not base output directory
         if not os.path.isabs(self.static_directory):

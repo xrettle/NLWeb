@@ -20,6 +20,9 @@ export class ChatUICommon {
     
     // Register CricketStatistics renderer
     this.jsonRenderer.registerTypeRenderer('CricketStatistics', (item) => this.renderCricketStatistics(item));
+
+    // Register StatisticalResult renderer for Data Commons visualizations
+    this.jsonRenderer.registerTypeRenderer('StatisticalResult', (item) => this.renderStatisticalResult(item));
   }
 
   /**
@@ -264,8 +267,8 @@ export class ChatUICommon {
   processMessageByType(data, bubble, context = {}) {
     let messageContent = context.messageContent || '';
     let allResults = context.allResults || [];
-    
-    
+
+
     // Extra logging right before switch
     
     switch(data.message_type) {
@@ -302,9 +305,28 @@ export class ChatUICommon {
         break;
         
       case 'result':
-        if (data.content && Array.isArray(data.content)) {
-          allResults = allResults.concat(data.content);
-          bubble.innerHTML = messageContent + this.renderItems(allResults);
+        if (data.content) {
+          // Only render the items from THIS message
+          let currentMessageItems = [];
+          if (Array.isArray(data.content)) {
+            currentMessageItems = data.content;
+            allResults = allResults.concat(data.content);
+          } else {
+            currentMessageItems = [data.content];
+            allResults.push(data.content);
+          }
+
+          // Create DOM element for just these items
+          const itemsHtml = this.renderItems(currentMessageItems);
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = itemsHtml;
+
+          // Return the DOM element instead of modifying bubble
+          const resultElement = tempDiv.querySelector('.search-results');
+          if (resultElement) {
+            // Store the element in the data for the caller to append
+            data._domElement = resultElement;
+          }
         }
         break;
         
@@ -425,26 +447,26 @@ export class ChatUICommon {
             script.async = true;
             document.head.appendChild(script);
           }
-          
+
           // Create container for the chart
           const chartContainer = document.createElement('div');
           chartContainer.className = 'chart-result-container';
           chartContainer.style.cssText = 'margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; min-height: 400px;';
-          
+
           // Parse the HTML to extract just the web component (remove script tags)
           const parser = new DOMParser();
           const doc = parser.parseFromString(data.html, 'text/html');
-          
+
           // Find all datacommons elements
           const datacommonsElements = doc.querySelectorAll('[datacommons-scatter], [datacommons-bar], [datacommons-line], [datacommons-pie], [datacommons-map], datacommons-scatter, datacommons-bar, datacommons-line, datacommons-pie, datacommons-map, datacommons-highlight, datacommons-ranking');
-          
+
           // Append each web component directly
           datacommonsElements.forEach(element => {
             // Clone the element to ensure we get all attributes
             const clonedElement = element.cloneNode(true);
             chartContainer.appendChild(clonedElement);
           });
-          
+
           // If no datacommons elements found, try to add the raw HTML (excluding scripts)
           if (datacommonsElements.length === 0) {
             const allElements = doc.body.querySelectorAll('*:not(script)');
@@ -452,17 +474,30 @@ export class ChatUICommon {
               chartContainer.appendChild(element.cloneNode(true));
             });
           }
-          
+
           // Append the chart to the message content
           bubble.innerHTML = messageContent + this.renderItems(allResults);
           bubble.appendChild(chartContainer);
-          
+
           // Force re-initialization of Data Commons components if available
           if (window.datacommons && window.datacommons.init) {
             setTimeout(() => {
               window.datacommons.init();
             }, 100);
           }
+        }
+        break;
+
+      case 'statistics_result':
+        // This case is no longer used - we now use 'result' with @type='StatisticalResult'
+        // Keeping for backward compatibility if needed
+        const htmlContent = data.content?.html || data.html;
+        if (htmlContent) {
+          const statsContainer = document.createElement('div');
+          statsContainer.className = 'statistics-result-container';
+          statsContainer.style.cssText = 'display: block; margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; min-height: 400px; clear: both;';
+          statsContainer.innerHTML = htmlContent;
+          bubble.appendChild(statsContainer);
         }
         break;
         
@@ -685,6 +720,35 @@ export class ChatUICommon {
   /**
    * Render Cricket Statistics with formatted table
    */
+  renderStatisticalResult(item) {
+    // Ensure DataCommons script is loaded
+    if (!document.querySelector('script[src*="datacommons.org/datacommons.js"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://datacommons.org/datacommons.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
+    // Create container for the statistics visualization
+    const container = document.createElement('div');
+    container.className = 'statistics-result-container';
+    container.style.cssText = 'display: block; margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; min-height: 400px; clear: both;';
+
+    // Insert the HTML content directly
+    if (item.html) {
+      container.innerHTML = item.html;
+    }
+
+    // Force re-initialization of Data Commons components after a delay
+    setTimeout(() => {
+      if (window.datacommons && window.datacommons.init) {
+        window.datacommons.init();
+      }
+    }, 100);
+
+    return container;
+  }
+
   renderCricketStatistics(item) {
     const container = document.createElement('div');
     container.className = 'cricket-stats-container';

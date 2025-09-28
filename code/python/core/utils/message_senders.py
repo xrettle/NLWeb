@@ -166,9 +166,8 @@ class MessageSender:
     
     def store_message(self, message: Union[Dict[str, Any], Message]):
         """
-        Store message in return_value for both streaming and non-streaming cases.
-        Messages are now stored as Message objects in handler.messages.
-        
+        Store message as Message objects in handler.messages.
+
         Args:
             message: The message to store (dict or Message object)
         """
@@ -187,29 +186,9 @@ class MessageSender:
                 )
         else:
             message_obj = message
-            message = message_obj.to_dict()  # Keep dict form for legacy code
-        
-        # Store the Message object in the new messages list
+
+        # Store the Message object in the messages list
         self.handler.messages.append(message_obj)
-        
-        # Legacy support: also update return_value with dict form
-        message_type = message.get("message_type")
-        
-        if message_type == "result":
-            # For result messages, accumulate in content array
-            if "content" not in self.handler.return_value:
-                self.handler.return_value["content"] = []
-            
-            content = message.get("content", [])
-            for result in content:
-                self.handler.return_value["content"].append(result)
-        else:
-            # For other message types, store under the message_type key
-            val = {}
-            for key in message:
-                if key != "message_type":
-                    val[key] = message[key]
-            self.handler.return_value[message_type] = val
     
     async def _send_headers_if_needed(self, is_streaming=True):
         """
@@ -233,19 +212,29 @@ class MessageSender:
             # Send headers from config as messages
             await self.send_config_headers()
         else:
-            # In non-streaming mode, add headers to return_value
+            # In non-streaming mode, headers are now sent as messages
             try:
-                # Get configured headers from CONFIG and add them to return_value
+                # Get configured headers from CONFIG and add them as messages
                 headers = CONFIG.get_headers()
                 for header_key, header_value in headers.items():
-                    self.handler.return_value[header_key] = {"message": header_value}
+                    header_message = {
+                        "message_type": header_key,
+                        "content": {"message": header_value}
+                    }
+                    header_message = self.add_message_metadata(header_message, use_system_sender=True)
+                    self.store_message(header_message)
             except Exception:
                 pass
             
             # Also add nlweb headers if available
             if hasattr(CONFIG.nlweb, 'headers') and CONFIG.nlweb.headers:
                 for header_key, header_value in CONFIG.nlweb.headers.items():
-                    self.handler.return_value[header_key] = header_value
+                    header_message = {
+                        "message_type": header_key,
+                        "content": header_value
+                    }
+                    header_message = self.add_message_metadata(header_message, use_system_sender=True)
+                    self.store_message(header_message)
     
     def add_message_metadata(self, message, use_system_sender=False):
         """

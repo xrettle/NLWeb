@@ -181,14 +181,7 @@ The user's question is: {request.query}. The item's description is {item.descrip
             }
 
             record_llm_call(ansr, prompt_str, self.handler.query)
-            
-            # Check if required_item_type is specified and filter based on @type
-            if self.handler.required_item_type is not None:
-                item_type = schema_object.get('@type', None)
-                if item_type != self.handler.required_item_type:
-                    logger.debug(f"Item type mismatch: expected {self.handler.required_item_type}, got {item_type} - setting score to 0")
-                    ranking["score"] = 0
-            
+               
             if (ranking["score"] > self.EARLY_SEND_THRESHOLD):
                 logger.info(f"High score item: {name} (score: {ranking['score']}) - sending early {self.ranking_type_str}")
                 try:
@@ -203,8 +196,6 @@ The user's question is: {request.query}. The item's description is {item.descrip
             logger.debug(f"Item {name} added to ranked answers")
         
         except Exception as e:
-            logger.error(f"Error in rankItem for {name}: {str(e)}")
-            logger.debug(f"Full error trace: ", exc_info=True)
             # Import here to avoid circular import
             from config.config import CONFIG
             if CONFIG.should_raise_exceptions():
@@ -216,7 +207,6 @@ The user's question is: {request.query}. The item's description is {item.descrip
 
         # Don't send if we've already reached the limit
         if self.num_results_sent >= max_results:
-            logger.debug(f"Not sending {result['name']} - already at limit ({self.num_results_sent}/{max_results})")
             return False
 
         should_send = False
@@ -230,12 +220,10 @@ The user's question is: {request.query}. The item's description is {item.descrip
                     should_send = True
                     break
 
-        logger.debug(f"Should send result {result['name']}? {should_send} (sent: {self.num_results_sent}/{max_results})")
         return should_send
     
     async def sendAnswers(self, answers, force=False):
         if not self.handler.connection_alive_event.is_set():
-            logger.warning("Connection lost during ranking, skipping sending results")
             return
         
         # If this is FastTrack ranking, wait for prechecks to complete before sending
@@ -246,19 +234,15 @@ The user's question is: {request.query}. The item's description is {item.descrip
                     timeout=5.0
                 )
                 if not prechecks_done:
-                    logger.info("Fast track aborted: prechecks not complete")
                     return
             except asyncio.TimeoutError:
-                logger.warning("Fast track: prechecks timed out, not sending answers")
                 return
                 
             # Check abort conditions after prechecks
             if self.handler.state.should_abort_fast_track():
-                logger.info("Fast track aborted, not sending answers")
                 return
               
         json_results = []
-        logger.debug(f"Considering sending {len(answers)} answers (force: {force})")
 
         # Get max_results from handler, or use default
         max_results = getattr(self.handler, 'max_results', self.NUM_RESULTS_TO_SEND)
@@ -266,7 +250,6 @@ The user's question is: {request.query}. The item's description is {item.descrip
         for result in answers:
             # Additional safety check - never exceed the limit even when forced
             if self.num_results_sent + len(json_results) >= max_results:
-                logger.info(f"Stopping at {len(json_results)} results to avoid exceeding limit of {max_results}")
                 break
                 
             if self.shouldSend(result) or force:
@@ -295,7 +278,6 @@ The user's question is: {request.query}. The item's description is {item.descrip
             
             # if we got here, prechecks are done. check once again for fast track abort
             if (self.ranking_type == Ranking.FAST_TRACK and self.handler.state.should_abort_fast_track()):
-                logger.info("Fast track aborted after pre-checks")
                 return
             
             try:
@@ -304,23 +286,16 @@ The user's question is: {request.query}. The item's description is {item.descrip
                     # Trim the results to not exceed the limit
                     allowed_count = max_results - self.num_results_sent
                     json_results = json_results[:allowed_count]
-                    logger.warning(f"Trimmed results to {len(json_results)} to stay within limit of {max_results}")
                 
                 if (self.ranking_type == Ranking.FAST_TRACK):
                     self.handler.fastTrackWorked = True
-                    logger.info("Fast track ranking successful")
                 
                 # Use the new schema to create and auto-send the message
                 create_assistant_result(json_results, handler=self.handler)
                 self.num_results_sent += len(json_results)
-                logger.info(f"Sent {len(json_results)} results, total sent: {self.num_results_sent}/{max_results}")
             except (BrokenPipeError, ConnectionResetError) as e:
-                logger.error(f"Client disconnected while sending answers: {str(e)}")
-                log(f"Client disconnected while sending answers: {str(e)}")
                 self.handler.connection_alive_event.clear()
             except Exception as e:
-                logger.error(f"Error sending answers: {str(e)}")
-                log(f"Error sending answers: {str(e)}")
                 self.handler.connection_alive_event.clear()
   
     async def sendMessageOnSitesBeingAsked(self, top_embeddings):
@@ -331,7 +306,6 @@ The user's question is: {request.query}. The item's description is {item.descrip
             
             top_sites = sorted(sites_in_embeddings.items(), key=lambda x: x[1], reverse=True)[:3]
             top_sites_str = ", ".join([self.prettyPrintSite(x[0]) for x in top_sites])
-            logger.info(f"Sending sites message: {top_sites_str}")
             
             try:
                 # Create a custom message with asking_sites type
@@ -348,34 +322,26 @@ The user's question is: {request.query}. The item's description is {item.descrip
                 self.handler.connection_alive_event.clear()
     
     async def do(self):
-        logger.info(f"Starting ranking process with {len(self.items)} items")
-        logger.info(f"Processing {len(self.items)} items for ranking")
+    
         tasks = []
         for url, json_str, name, site in self.items:
             if self.handler.connection_alive_event.is_set():  # Only add new tasks if connection is still alive
                 tasks.append(asyncio.create_task(self.rankItem(url, json_str, name, site)))
-            else:
-                logger.warning("Connection lost, not creating new ranking tasks")
        
-        await self.sendMessageOnSitesBeingAsked(self.items)
+        # await self.sendMessageOnSitesBeingAsked(self.items)
 
         try:
-            logger.debug(f"Running {len(tasks)} ranking tasks concurrently")
             await asyncio.gather(*tasks, return_exceptions=True)
         except Exception as e:
-            logger.error(f"Error during ranking tasks: {str(e)}")
-            log(f"Error during ranking tasks: {str(e)}")
+            return
 
         if not self.handler.connection_alive_event.is_set():
-            logger.warning("Connection lost during ranking, skipping sending results")
-            log("Connection lost during ranking, skipping sending results")
             return
 
         # Wait for pre checks using event
         await self.handler.pre_checks_done_event.wait()
         
         if (self.ranking_type == Ranking.FAST_TRACK and self.handler.state.should_abort_fast_track()):
-            logger.info("Fast track aborted after ranking tasks completed")
             return
     
         # Use min_score from handler if available, otherwise default to 51
@@ -386,13 +352,8 @@ The user's question is: {request.query}. The item's description is {item.descrip
         ranked = sorted(filtered, key=lambda x: x['ranking']["score"], reverse=True)
         self.handler.final_ranked_answers = ranked[:max_results]
 
-        logger.info(f"Filtered to {len(filtered)} results with score > {min_score_threshold}")
-        logger.info(f"Filtered {len(self.rankedAnswers)} results to {len(filtered)} with score > {min_score_threshold}, returning top {len(self.handler.final_ranked_answers)}")
-        logger.debug(f"Top 3 results: {[(r['name'], r['ranking']['score']) for r in ranked[:3]]}")
-
         results = [r for r in self.rankedAnswers if r['sent'] == False]
         if (self.num_results_sent > max_results):
-            logger.info(f"Already sent {self.num_results_sent} results, returning without sending more")
             return
        
         # Sort by score in descending order
@@ -402,7 +363,6 @@ The user's question is: {request.query}. The item's description is {item.descrip
         # Calculate how many more results we can send
         remaining_slots = max_results - self.num_results_sent
         if remaining_slots <= 0:
-            logger.info(f"Already sent {self.num_results_sent} results, at or above limit of {max_results}")
             return
             
         if len(good_results) >= remaining_slots:
@@ -411,11 +371,8 @@ The user's question is: {request.query}. The item's description is {item.descrip
             tosend = good_results
 
         try:
-            logger.info(f"Sending final batch of {len(tosend)} results")
             await self.sendAnswers(tosend, force=True)
         except (BrokenPipeError, ConnectionResetError):
-            logger.error("Client disconnected during final answer sending")
-            log("Client disconnected during final answer sending")
             self.handler.connection_alive_event.clear()
 
     def prettyPrintSite(self, site):

@@ -772,13 +772,6 @@ export class UnifiedChatInterface {
   }
   
   handleStreamData(data, shouldStore = true) {
-    // No deduplication - multiple events can share the same message_id
-    // (e.g., multiple NLWeb results belong to the same logical message)
-    
-    
-    // Debug logging for multi_site_complete
-    if (data.message_type === 'multi_site_complete') {
-    }
     
     // Track messages for sorting
     if (!this.state.messageBuffer) {
@@ -898,35 +891,55 @@ export class UnifiedChatInterface {
       this.state.currentNlwebBlock = {
         beginTimestamp: data.timestamp,
         query: data.query,
-        messages: []
+        renderedElements: []
       };
       // Don't buffer - we'll get messages from DOM
       return;
     }
     
     if (data.message_type === 'end-nlweb-response') {
+      if (this.state.currentNlwebBlock && this.state.currentNlwebBlock.renderedElements &&
+          this.state.currentNlwebBlock.renderedElements.length > 0 && this.state.currentStreaming) {
+
+        // Sort the element groups by score (descending)
+        this.state.currentNlwebBlock.renderedElements.sort((a, b) => b.score - a.score);
+
+        // Find the search-results container
+        const { textDiv } = this.state.currentStreaming;
+        const mainContainer = textDiv.querySelector('.search-results');
+
+        if (mainContainer) {
+          // Clear the container
+          mainContainer.innerHTML = '';
+
+          // Re-append elements in sorted order
+          this.state.currentNlwebBlock.renderedElements.forEach(group => {
+            group.elements.forEach(element => {
+              mainContainer.appendChild(element);
+            });
+          });
+        }
+      }
+
       if (this.state.currentNlwebBlock) {
         this.state.currentNlwebBlock.endTimestamp = data.timestamp;
         this.state.nlwebBlocks.push(this.state.currentNlwebBlock);
         this.state.currentNlwebBlock = null;
-        
-        // Don't sort - keep messages in order they were received
       }
-      
+
+      // End streaming when we receive end-nlweb-response
+      // This will check if content was received and show "No answers found" if needed
+      this.endStreaming();
+
       // Scroll to the user message after NLWeb response completes
       setTimeout(() => {
         this.scrollToUserMessage();
       }, 100);
-      
+
       // Don't buffer - we'll get messages from DOM
       return;
     }
     
-    // Track messages within NLWeb blocks
-    if (this.state.currentNlwebBlock && data.message_type === 'result') {
-      this.state.currentNlwebBlock.messages.push(data);
-      // Continue to display immediately - will re-sort at the end
-    }
     
     // Handle participant updates (join/leave notifications) as messages
     if (data.type === 'participant_update') {
@@ -1003,11 +1016,6 @@ export class UnifiedChatInterface {
     if (data.message_type === 'multi_site_complete') {
     }
     
-    // Only buffer NLWeb result messages for score-based sorting within blocks
-    if (this.state.currentNlwebBlock && data.message_type === 'result') {
-      this.state.currentNlwebBlock.messages.push(data);
-      // Don't buffer in general messageBuffer - we'll get them from DOM
-    }
     
     // Store each streaming message to conversation if shouldStore is true
     if (shouldStore) {
@@ -1020,56 +1028,84 @@ export class UnifiedChatInterface {
     }
     
     const { textDiv, context, spinner, hasReceivedContent, bubble } = this.state.currentStreaming;
-    
-    // Handle spinner transitions for site='all' queries
-    if (this.state.selectedSite === 'all') {
-      // Remove initial spinner when sites list appears
-      if (data.message_type === 'asking_sites' && spinner && !hasReceivedContent) {
-        spinner.remove();
-        bubble.classList.remove('with-spinner');
-        this.state.currentStreaming.hasReceivedContent = true;
-        
-        // Process the sites message first
-        const result = this.uiCommon.processMessageByType(data, textDiv, context);
-        this.state.currentStreaming.context = result;
-        
-        // Add secondary spinner after sites list
-        const secondarySpinner = document.createElement('div');
-        secondarySpinner.className = 'streaming-spinner-secondary';
-        secondarySpinner.innerHTML = '<span></span><span></span><span></span>';
-        textDiv.appendChild(secondarySpinner);
-        this.state.currentStreaming.secondarySpinner = secondarySpinner;
-        return;
-      }
-      
-      // Remove secondary spinner when first result arrives
-      if (data.message_type === 'result' && this.state.currentStreaming.secondarySpinner) {
-        this.state.currentStreaming.secondarySpinner.remove();
-        delete this.state.currentStreaming.secondarySpinner;
-      }
-    } else {
-      // For non-'all' sites, remove spinner on first content
-      if (spinner && !hasReceivedContent && 
-          (data.message_type === 'result' || data.message_type === 'nlws' || 
-           data.message_type === 'summary' || data.message_type === 'asking_sites')) {
-        spinner.remove();
-        bubble.classList.remove('with-spinner');
-        this.state.currentStreaming.hasReceivedContent = true;
+
+    // Mark that we've received content for these message types
+    if (data.message_type === 'result' ||
+        data.message_type === 'nlws' ||
+        data.message_type === 'summary' ||
+        data.message_type === 'asking_sites') {
+      this.state.currentStreaming.hasReceivedContent = true;
+    }
+
+    // Handle spinner removal separately
+    if (spinner) {
+      if (this.state.selectedSite === 'all') {
+        // Remove initial spinner when sites list appears
+        if (data.message_type === 'asking_sites') {
+          spinner.remove();
+          bubble.classList.remove('with-spinner');
+
+          // Process the sites message first
+          const result = this.uiCommon.processMessageByType(data, textDiv, context);
+          this.state.currentStreaming.context = result;
+
+          // Add secondary spinner after sites list
+          const secondarySpinner = document.createElement('div');
+          secondarySpinner.className = 'streaming-spinner-secondary';
+          secondarySpinner.innerHTML = '<span></span><span></span><span></span>';
+          textDiv.appendChild(secondarySpinner);
+          this.state.currentStreaming.secondarySpinner = secondarySpinner;
+          return;
+        }
+
+        // Remove secondary spinner when first result arrives
+        if (data.message_type === 'result' && this.state.currentStreaming.secondarySpinner) {
+          this.state.currentStreaming.secondarySpinner.remove();
+          delete this.state.currentStreaming.secondarySpinner;
+        }
+      } else {
+        // For non-'all' sites, remove spinner on first content
+        if (!hasReceivedContent) {
+          spinner.remove();
+          bubble.classList.remove('with-spinner');
+        }
       }
     }
     
     // Use UI common to process the message
     const result = this.uiCommon.processMessageByType(data, textDiv, context);
     this.state.currentStreaming.context = result;
-    
-    // Check for completion - but don't end streaming yet if we're expecting multi_site_complete
-    if (data.type === 'complete' || data.message_type === 'complete' || data.type === 'stream_end') {
-      // If we're in a multi-site query (site=all), don't end streaming yet
-      // The multi_site_complete message will come after this
-      if (this.state.selectedSite !== 'all') {
-        this.endStreaming();
+
+    // Handle result messages specially - append the DOM element
+    if (data.message_type === 'result' && data._domElement) {
+      // Find or create the main search-results container
+      let mainContainer = textDiv.querySelector('.search-results');
+      if (!mainContainer) {
+        // First result - append the whole container
+        textDiv.appendChild(data._domElement);
+        mainContainer = data._domElement;
+      } else {
+        // Subsequent results - move children to existing container
+        while (data._domElement.firstChild) {
+          mainContainer.appendChild(data._domElement.firstChild);
+        }
+      }
+
+      // Store the DOM element with score for later sorting
+      if (this.state.currentNlwebBlock) {
+        if (!this.state.currentNlwebBlock.renderedElements) {
+          this.state.currentNlwebBlock.renderedElements = [];
+        }
+        const score = (data.content && data.content[0]?.score) || 0;
+
+        // Store the actual item container elements that were just added
+        const newItems = Array.from(mainContainer.querySelectorAll('.item-container')).slice(-data.content.length);
+        this.state.currentNlwebBlock.renderedElements.push({ elements: newItems, score: score });
       }
     }
+    
+    // Note: We no longer handle 'complete' message here since we use end-nlweb-response instead
+    // The old complete message has been removed from the backend
     
     // End streaming after multi_site_complete for multi-site queries
     if (data.message_type === 'multi_site_complete') {

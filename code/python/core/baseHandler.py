@@ -164,10 +164,8 @@ class NLWebHandler:
         self.fastTrackWorked = False
         self.sites_in_embeddings_sent = False
 
-        # this is the value that will be returned to the user. 
-        # it will be a dictionary with the message type as the key and the value being
-        # the value of the message.
-        self.return_value = {}
+        # Messages list stores all messages for this conversation
+        # (return_value legacy has been removed)
 
         self.versionNumberSent = False
         self.headersSent = False
@@ -335,23 +333,21 @@ class NLWebHandler:
             
             await self.prepare()
             if (self.query_done):
-                return self.return_value
+                return [msg.to_dict() for msg in self.messages]
             if (not self.fastTrackWorked):
                 await self.route_query_based_on_tools()
             
             # Check if query is done regardless of whether FastTrack worked
             if (self.query_done):
-                return self.return_value
-                
+                return [msg.to_dict() for msg in self.messages]
+
             await post_ranking.PostRanking(self).do()
-            
-            self.return_value["conversation_id"] = self.conversation_id
-            
+
             # Send end-nlweb-response message at the end
             await self.message_sender.send_end_response()
-            
-            # Return both return_value and messages (converted to dicts for backward compatibility)
-            return self.return_value, [msg.to_dict() for msg in self.messages]
+
+            # Return only messages (no more legacy return_value)
+            return [msg.to_dict() for msg in self.messages]
         except Exception as e:
             traceback.print_exc()
             
@@ -436,7 +432,7 @@ class NLWebHandler:
     async def get_ranked_answers(self):
         try:
             await ranking.Ranking(self, self.final_retrieved_items, ranking.Ranking.REGULAR_TRACK).do()
-            return self.return_value
+            return [msg.to_dict() for msg in self.messages]
         except Exception as e:
             traceback.print_exc()
             raise
