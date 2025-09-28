@@ -26,6 +26,16 @@ export class ChatUICommon {
   }
 
   /**
+   * Escape HTML special characters to prevent XSS
+   */
+  escapeHtml(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+  }
+
+  /**
    * Render multiple items/results
    */
   renderItems(items) {
@@ -283,13 +293,13 @@ export class ChatUICommon {
             const href = `/?site=${encodedSite}&query=${encodedQuery}`;
             // Add comma inside the link for better spacing, except for last item
             const siteName = index < array.length - 1 ? `${site.name},` : site.name;
-            return `<a href="${href}" target="_blank" style="color: #0066cc; text-decoration: none; margin-right: 6px;">${siteName}</a>`;
+            return `<a href="${href}" target="_blank" style="color: #0066cc; text-decoration: none; margin-right: 6px;">${this.escapeHtml(siteName)}</a>`;
           }).join(' ');
           messageContent = `Searching: ${siteLinks}\n\n`;
           bubble.innerHTML = messageContent + this.renderItems(allResults);
         } else if (data.content) {
           // Old format fallback
-          messageContent = `Searching: ${data.content}\n\n`;
+          messageContent = `Searching: ${this.escapeHtml(data.content)}\n\n`;
           bubble.innerHTML = messageContent + this.renderItems(allResults);
         }
         break;
@@ -298,7 +308,7 @@ export class ChatUICommon {
         // Display the decontextualized query if different from original
         if (data.decontextualized_query && data.original_query && 
             data.decontextualized_query !== data.original_query) {
-          const decontextMsg = `<div style="font-style: italic; color: #666; margin-bottom: 10px;">Query interpreted as: "${data.decontextualized_query}"</div>`;
+          const decontextMsg = `<div style="font-style: italic; color: #666; margin-bottom: 10px;">Query interpreted as: "${this.escapeHtml(data.decontextualized_query)}"</div>`;
           messageContent = messageContent + decontextMsg;
           bubble.innerHTML = messageContent + this.renderItems(allResults);
         }
@@ -332,7 +342,7 @@ export class ChatUICommon {
         
       case 'nlws':
         if (data.answer && typeof data.answer === 'string') {
-          messageContent = data.answer + '\n\n';
+          messageContent = this.escapeHtml(data.answer) + '\n\n';
         }
         if (data.items && Array.isArray(data.items)) {
           allResults = data.items;
@@ -396,7 +406,7 @@ export class ChatUICommon {
         
       case 'ask_user':
         if (data.content) {
-          messageContent += data.content + '\n';
+          messageContent += this.escapeHtml(data.content) + '\n';
           bubble.innerHTML = messageContent + this.renderItems(allResults);
         }
         break;
@@ -424,7 +434,7 @@ export class ChatUICommon {
         // Handle query analysis which may include decontextualized query
         if (data.decontextualized_query && data.original_query && 
             data.decontextualized_query !== data.original_query) {
-          const decontextMsg = `<div style="font-style: italic; color: #666; margin-bottom: 10px;">Query interpreted as: "${data.decontextualized_query}"</div>`;
+          const decontextMsg = `<div style="font-style: italic; color: #666; margin-bottom: 10px;">Query interpreted as: "${this.escapeHtml(data.decontextualized_query)}"</div>`;
           messageContent = messageContent + decontextMsg;
           bubble.innerHTML = messageContent + this.renderItems(allResults);
         }
