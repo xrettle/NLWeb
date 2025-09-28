@@ -506,8 +506,25 @@ export class ChatUICommon {
           const statsContainer = document.createElement('div');
           statsContainer.className = 'statistics-result-container';
           statsContainer.style.cssText = 'display: block; margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; min-height: 400px; clear: both;';
-          // This is trusted HTML from backend for Data Commons visualizations
-          statsContainer.innerHTML = htmlContent;
+
+          // Use DOMPurify to sanitize the HTML content if available
+          if (typeof DOMPurify !== 'undefined') {
+            // Sanitize the HTML content to prevent XSS attacks
+            const sanitizedHTML = DOMPurify.sanitize(htmlContent, {
+              ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                             'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
+                             'a', 'img', 'strong', 'em', 'code', 'pre', 'br', 'hr'],
+              ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title',
+                             'width', 'height', 'colspan', 'rowspan'],
+              ALLOW_DATA_ATTR: false
+            });
+            statsContainer.innerHTML = sanitizedHTML;
+          } else {
+            // Fallback to safe text content if DOMPurify is not available
+            console.warn('DOMPurify not available, using safe text fallback');
+            statsContainer.textContent = 'Statistics display requires DOMPurify for security. Please reload the page.';
+          }
+
           bubble.appendChild(statsContainer);
         }
         break;
