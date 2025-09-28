@@ -38,13 +38,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Create a non-root user and set permissions
+# Create a non-root user
 RUN groupadd -r nlweb && \
-    useradd -r -g nlweb -d /app -s /bin/bash nlweb && \
-    mkdir -p /app/data /app/data/json_with_embeddings && \
-    chown -R nlweb:nlweb /app
-
-USER nlweb
+    useradd -r -g nlweb -d /app -s /bin/bash nlweb
 
 # Copy application code
 COPY code/ /app/
@@ -55,9 +51,14 @@ COPY config/ /app/config/
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Ensure data directories exist and have proper permissions
-RUN mkdir -p /app/data/json_with_embeddings && \
-    chmod -R 755 /app/data
+# Create data directories and set permissions as root
+RUN mkdir -p /app/data /app/data/json_with_embeddings /app/logs && \
+    # Copy static files to expected location for static route resolution
+    cp -r /app/static /static && \
+    chown -R nlweb:nlweb /app && \
+    chmod -R 755 /app/data /app/logs
+
+USER nlweb
 
 # Expose the port the app runs on
 EXPOSE 8000
