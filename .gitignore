@@ -452,3 +452,8 @@ old_code/set_keys.sh
 .vscode/settings.json
 /static/ta/ba
 static/.DS_Store
+
+# Deployment archives
+*_deploy_*.zip
+nlwm_deploy_*.zip
+agentfinder_deploy_*.zip
