@@ -1078,16 +1078,27 @@ export class UnifiedChatInterface {
 
     // Handle result messages specially - append the DOM element
     if (data.message_type === 'result' && data._domElement) {
+      // Validate that _domElement is a safe DOM element we created
+      if (!(data._domElement instanceof Element) || data._domElement.tagName !== 'DIV') {
+        console.error('Invalid DOM element in result message');
+        return;
+      }
+
       // Find or create the main search-results container
       let mainContainer = textDiv.querySelector('.search-results');
       if (!mainContainer) {
         // First result - append the whole container
-        textDiv.appendChild(data._domElement);
-        mainContainer = data._domElement;
+        // Clone the node to ensure it's safe
+        const safeElement = data._domElement.cloneNode(true);
+        textDiv.appendChild(safeElement);
+        mainContainer = safeElement;
       } else {
         // Subsequent results - move children to existing container
         while (data._domElement.firstChild) {
-          mainContainer.appendChild(data._domElement.firstChild);
+          // Clone each child before appending to ensure safety
+          const safeChild = data._domElement.firstChild.cloneNode(true);
+          data._domElement.removeChild(data._domElement.firstChild);
+          mainContainer.appendChild(safeChild);
         }
       }
 

@@ -506,6 +506,7 @@ export class ChatUICommon {
           const statsContainer = document.createElement('div');
           statsContainer.className = 'statistics-result-container';
           statsContainer.style.cssText = 'display: block; margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px; min-height: 400px; clear: both;';
+          // This is trusted HTML from backend for Data Commons visualizations
           statsContainer.innerHTML = htmlContent;
           bubble.appendChild(statsContainer);
         }
