@@ -10,7 +10,7 @@ endpoints:
     db_type: azure_ai_search
 
   azure_ai_search:
-    enabled: false
+    enabled: true
     api_key_env: AZURE_VECTOR_SEARCH_API_KEY
     api_endpoint_env: AZURE_VECTOR_SEARCH_ENDPOINT
     index_name: embeddings1536
@@ -23,7 +23,40 @@ endpoints:
     index_name: embeddings1536
     db_type: azure_ai_search
     name: NLWeb_Crawl_Backup
-  
+
+  nlweb_west:
+    enabled: false
+    api_key_env: NLWEB_WEST_API_KEY
+    api_endpoint_env: NLWEB_WEST_ENDPOINT
+    index_name: embeddings1536
+    db_type: azure_ai_search
+
+  # Bing Web Search API for real-time web search
+  bing_search:
+    enabled: false
+    # API key for Bing Web Search API
+    api_key_env: BING_API_KEY
+    # Bing API endpoint (optional, defaults to standard Bing API)
+    api_endpoint_env: BING_API_ENDPOINT
+    # Index name (not used for Bing, but kept for consistency)
+    index_name: web_search
+    # Database type
+    db_type: bing_search
+
+  clinical_trials_search:
+    enabled: false
+    api_key_env: CLINICAL_TRIALS_API_KEY
+    api_endpoint_env: CLINICAL_TRIALS_ENDPOINT
+    index_name: embeddings1536
+    db_type: azure_ai_search
+
+  cloudflare_autorag:
+    enabled: false
+    api_key_env: CLOUDFLARE_API_TOKEN
+    api_endpoint_env: CLOUDFLARE_AUTORAG_ENDPOINT
+    index_name: CLOUDFLARE_RAG_ID_ENV
+    db_type: cloudflare_autorag
+
   elasticsearch:
     enabled: false
     # Elasticsearch endpoint (localhost or remote URL with Elastic Cloud/Serverless)
