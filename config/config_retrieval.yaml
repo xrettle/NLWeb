@@ -2,15 +2,9 @@ write_endpoint: qdrant_local
 
 endpoints:
 
-  nlweb_west:
-    enabled: true
-    api_key_env: NLWEB_WEST_API_KEY
-    api_endpoint_env: NLWEB_WEST_ENDPOINT
-    index_name: embeddings1536
-    db_type: azure_ai_search
-
+#Azure endpoints
   azure_ai_search:
-    enabled: true
+    enabled: false
     api_key_env: AZURE_VECTOR_SEARCH_API_KEY
     api_endpoint_env: AZURE_VECTOR_SEARCH_ENDPOINT
     index_name: embeddings1536
@@ -25,7 +19,7 @@ endpoints:
     name: NLWeb_Crawl_Backup
 
   nlweb_west:
-    enabled: false
+    enabled: true
     api_key_env: NLWEB_WEST_API_KEY
     api_endpoint_env: NLWEB_WEST_ENDPOINT
     index_name: embeddings1536
@@ -70,20 +64,8 @@ endpoints:
     # Vector properties
     vector_type:
       type: dense_vector
-
-  clinical_trials_search:
-    enabled: false
-    api_key_env: CLINICAL_TRIALS_API_KEY
-    api_endpoint_env: CLINICAL_TRIALS_ENDPOINT
-    index_name: embeddings1536
-    db_type: azure_ai_search
-
-  # Shopify MCP endpoint for product search across Shopify stores
-  shopify:
-    enabled: true
-    db_type: shopify_mcp
-    # Note: mcp_endpoint will be dynamically set based on the site being queried
-    name: Shopify MCP Search
+      index_options:
+        type: int8_hnsw # byte quantization for efficient storage
 
   # Milvus is still under development and not yet supported. 
   milvus:
@@ -151,6 +133,13 @@ endpoints:
     index_name: nlweb_collection
     # Specify the database type
     db_type: qdrant
+
+  # Shopify MCP endpoint for product search across Shopify stores
+  shopify:
+    enabled: false
+    db_type: shopify_mcp
+    # Note: mcp_endpoint will be dynamically set based on the site being queried
+    name: Shopify MCP Search
 
   snowflake_cortex_search_1:
     enabled: false
