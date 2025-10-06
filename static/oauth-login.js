@@ -42,7 +42,6 @@ class OAuthManager {
                 this.config = {};
             }
         } catch (error) {
-            console.error('Error loading OAuth config:', error);
             this.config = {};
         }
     }
@@ -76,6 +75,18 @@ class OAuthManager {
             }
         });
         
+        // Setup email login
+        const emailLoginBtn = document.getElementById('emailLoginBtn');
+        const emailLoginInput = document.getElementById('emailLoginInput');
+        if (emailLoginBtn && emailLoginInput) {
+            emailLoginBtn.addEventListener('click', () => this.handleEmailLogin());
+            emailLoginInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.handleEmailLogin();
+                }
+            });
+        }
+        
         // Setup popup close button
         const closeBtn = document.querySelector('.oauth-popup-close');
         if (closeBtn) {
@@ -97,15 +108,12 @@ class OAuthManager {
         const authToken = localStorage.getItem('authToken');
         const userInfo = localStorage.getItem('userInfo');
         
-        console.log('Checking existing session:', { authToken: !!authToken, userInfo: !!userInfo });
         
         if (authToken && userInfo) {
             try {
                 const user = JSON.parse(userInfo);
-                console.log('Existing user session found:', user);
                 this.updateUIForLoggedInUser(user);
             } catch (error) {
-                console.error('Error parsing user info:', error);
                 this.clearSession();
             }
         }
@@ -128,7 +136,6 @@ class OAuthManager {
     handleLogin(provider) {
         
         if (!this.config || !this.config[provider]) {
-            console.error(`OAuth not configured for ${provider}`);
             alert(`OAuth not configured for ${provider}. Please check server configuration.`);
             return;
         }
@@ -221,7 +228,6 @@ class OAuthManager {
         
         if (event.data && event.data.type === 'oauth_callback') {
             if (event.data.error) {
-                console.error('OAuth error:', event.data.error);
                 alert(`Login failed: ${event.data.error}`);
                 return;
             }
@@ -255,11 +261,19 @@ class OAuthManager {
                     user: event.data.authData ? event.data.authData.user_info : null
                 }
             }));
+            
+            // If there's a pending join operation, retry it
+            const pendingJoin = sessionStorage.getItem('pendingJoinConversation');
+            if (pendingJoin) {
+                sessionStorage.removeItem('pendingJoinConversation');
+                
+                // Redirect to join.html to complete the join process
+                window.location.href = `/static/join.html?conv_id=${pendingJoin}`;
+            }
         }
     }
     
     updateUIForLoggedInUser(user) {
-        console.log('Updating UI for logged in user:', user);
         
         // Update UI elements
         const loginBtn = document.getElementById('loginBtn');
@@ -267,12 +281,6 @@ class OAuthManager {
         const userName = document.getElementById('userName');
         const providerIcon = document.getElementById('providerIcon');
         
-        console.log('UI elements found:', {
-            loginBtn: !!loginBtn,
-            userInfo: !!userInfo,
-            userName: !!userName,
-            providerIcon: !!providerIcon
-        });
         
         if (loginBtn) loginBtn.style.display = 'none';
         if (userInfo) userInfo.style.display = 'flex';
@@ -281,7 +289,6 @@ class OAuthManager {
         // Set provider icon
         if (providerIcon && user.provider) {
             providerIcon.className = `provider-icon ${user.provider}`;
-            console.log('Set provider icon class:', providerIcon.className);
         }
         
         // Also set data-provider attribute on user-info for CSS
@@ -303,7 +310,6 @@ class OAuthManager {
                 });
             }
         } catch (error) {
-            console.error('Logout error:', error);
         }
         
         // Clear session
@@ -328,6 +334,71 @@ class OAuthManager {
     clearSession() {
         localStorage.removeItem('authToken');
         localStorage.removeItem('userInfo');
+    }
+    
+    async handleEmailLogin() {
+        const emailInput = document.getElementById('emailLoginInput');
+        const email = emailInput.value.trim();
+        
+        if (!email) {
+            alert('Please enter an email address');
+            return;
+        }
+        
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            alert('Please enter a valid email address');
+            return;
+        }
+        
+        try {
+            // Create a simple auth token for email users
+            const userInfo = {
+                id: email,
+                email: email,
+                name: email.split('@')[0], // Use part before @ as name
+                provider: 'email',
+                authenticated: true
+            };
+            
+            // Generate a simple token (in production, this should be done server-side)
+            const authToken = btoa(JSON.stringify({
+                user_id: email,
+                email: email,
+                provider: 'email',
+                timestamp: Date.now()
+            }));
+            
+            // Store auth info
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('userInfo', JSON.stringify(userInfo));
+            
+            // Update UI
+            this.updateUIForLoggedInUser(userInfo);
+            
+            // Hide login popup
+            this.hideLoginPopup();
+            
+            // Dispatch auth state change event
+            window.dispatchEvent(new CustomEvent('authStateChanged', {
+                detail: {
+                    isAuthenticated: true,
+                    user: userInfo
+                }
+            }));
+            
+            // If there's a pending join operation, retry it
+            const pendingJoin = sessionStorage.getItem('pendingJoinConversation');
+            if (pendingJoin) {
+                sessionStorage.removeItem('pendingJoinConversation');
+                
+                // Redirect to join.html to complete the join process
+                window.location.href = `/static/join.html?conv_id=${pendingJoin}`;
+            }
+        } catch (error) {
+            alert('Login failed. Please try again.');
+        }
     }
 }
 

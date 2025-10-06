@@ -22,6 +22,8 @@ class StatisticsQuery:
     limit: Optional[int] = None
     original_query: str = ""
 
+
+
 class StatisticsHandler():
     def __init__(self, params, handler):
         self.handler = handler
@@ -52,6 +54,33 @@ class StatisticsHandler():
                             template_num = parts[0].strip()
                             template_text = parts[1].strip()
                             
+                            # Initialize default values
+                            pattern = ""
+                            variables_dict = {}
+                            visualization_hints = []
+                            
+                            # Check if there's a third column in square brackets
+                            if '[' in template_text and ']' in template_text:
+                                bracket_start = template_text.rfind('[')
+                                bracket_end = template_text.rfind(']')
+                                
+                                if bracket_start < bracket_end:
+                                    # Extract visualization hints from the third column
+                                    viz_hints_str = template_text[bracket_start+1:bracket_end].strip()
+                                    
+                                    # Parse function-style syntax: func(param1, param2) or just func
+                                    if '(' in viz_hints_str and ')' in viz_hints_str:
+                                        # Extract function name (visualization type)
+                                        func_name = viz_hints_str[:viz_hints_str.index('(')].strip()
+                                        # Also store the full hint for title generation
+                                        visualization_hints = [func_name, viz_hints_str]
+                                    else:
+                                        # Simple format without parameters
+                                        visualization_hints = [viz_hints_str.strip()]
+                                    
+                                    # Remove the third column from the template text
+                                    template_text = template_text[:bracket_start].strip()
+                            
                             # Extract the template pattern and variables
                             if '{' in template_text:
                                 pattern_end = template_text.find('{')
@@ -60,9 +89,8 @@ class StatisticsHandler():
                                 
                                 # Parse the variables JSON
                                 try:
-                                    # Convert single quotes to double quotes for valid JSON
-                                    vars_json_str_fixed = vars_json_str.replace("'", '"')
-                                    variables_dict = json.loads(vars_json_str_fixed)
+                                    # Parse the JSON directly (templates now use proper double quotes)
+                                    variables_dict = json.loads(vars_json_str)
                                 except json.JSONDecodeError as e:
                                     logger.error(f"Error parsing variables JSON for template {template_num}: {e}")
                                     variables_dict = {}
@@ -78,6 +106,7 @@ class StatisticsHandler():
                                 'id': template_num,
                                 'pattern': pattern,
                                 'variables': variables_dict,
+                                'visualization_hints': visualization_hints,
                                 'original': line
                             })
         except Exception as e:
@@ -182,11 +211,11 @@ class StatisticsHandler():
         for (template_id, score, extracted_values) in results:
             template = next((t for t in self.templates if t['id'] == template_id), None)
             if template:
-                all_template_scores.append((score, template_id, template['pattern']))
+                all_template_scores.append((score, template_id, template['pattern'], extracted_values))
         
         all_template_scores.sort(reverse=True)
-        for i, (score, tid, pattern) in enumerate(all_template_scores[:3]):
-            print(f"  {i+1}. Template {tid}: {score} - '{pattern}'")
+        for i, (score, tid, pattern, extracted_values) in enumerate(all_template_scores[:3]):
+            print(f"  {i+1}. Template {tid}: {score} - '{pattern}' '{extracted_values}'")
         
         return matched_templates
     
@@ -227,7 +256,7 @@ class StatisticsHandler():
         for place in places:
             # Handle common cases directly
             place_lower = place.lower()
-            if place_lower in ["us", "usa", "united states", "america"]:
+            if place_lower in ["us", "usa", "united states", "america", "us counties"]:
                 async def return_usa(p=place):
                     return (p, "country/USA")
                 place_tasks.append(asyncio.create_task(return_usa()))
@@ -251,12 +280,15 @@ class StatisticsHandler():
             
             # Create async task for LLM call
             async def get_place_dcid(place=place, prompt=prompt):
-                response = await ask_llm(prompt, {"dcid": "string"}, level="low")
+                response = await ask_llm(prompt, {"dcid": "string"}, level="low", query_params=self.handler.query_params)
                 dcid = response.get('dcid', '') if isinstance(response, dict) else str(response).strip()
                 
                 # Fallback to simple heuristic if LLM fails
                 if not dcid or dcid == "UNKNOWN":
-                    if "county" in place.lower():
+                    if "us counties" in place.lower():
+                        # For generic "US counties", return country/USA
+                        dcid = "country/USA"
+                    elif "county" in place.lower():
                         place_name = place.lower().replace(" county", "").strip()
                         dcid = f"geoId/{place_name}"
                     else:
@@ -284,34 +316,80 @@ class StatisticsHandler():
         
         return variable_dcids, place_dcids
     
-    async def determine_visualization_type(self, query_type: str, num_variables: int, num_places: int) -> str:
-        """Determine the best web component type for visualization."""
-        prompt = f"""
-        Query: {query_type} with {num_variables} variable(s) and {num_places} place(s)
+    def determine_visualization_type(self, template_hints: List[str]) -> Optional[str]:
+        """Return the visualization type from template hints."""
         
-        Choose visualization:
-        - datacommons-bar: comparing values (e.g., income in 2 counties, multiple variables in 1 place)
-        - datacommons-line: trends over time (e.g., population growth 2000-2020)
-        - datacommons-map: geographic distribution (e.g., unemployment by county across a state)
-        - datacommons-scatter: correlations (e.g., income vs education level)
-        - datacommons-ranking: top/bottom lists (e.g., top 10 counties by population)
-        - datacommons-highlight: single value display (e.g., population of one city)
+        if template_hints and len(template_hints) > 0:
+            # Return the first hint directly (without 'datacommons-' prefix)
+            return template_hints[0]
         
-        Examples:
-        - single_value, 1 var, 1 place → datacommons-highlight
-        - comparison, 1 var, 2 places → datacommons-bar
-        - ranking, 1 var, many places → datacommons-ranking
-        - correlation, 2 vars, many places → datacommons-scatter
-        - trend, 1 var, 1 place (over time) → datacommons-line
+        # Return None if no hints provided
+        return None
+    
+    def generate_title_from_hint(self, template_hints: List[str], extracted_values: Dict, 
+                                 variable_dcids: List[str], place_dcids: List[str]) -> str:
+        """Generate a descriptive title from visualization hints and actual DCID values."""
         
-        Return only the component name.
-        """
+        if not template_hints or len(template_hints) == 0:
+            return ""
         
-        response = await ask_llm(prompt, {"component_type": "string"}, level="low", query_params=self.handler.query_params)
-        print(f"Visualization type response: {response}")
-        if isinstance(response, dict):
-            return response.get('component_type', 'datacommons-highlight')
-        return str(response).strip()
+        # Get the visualization type
+        viz_type = template_hints[0]
+        
+        # Generate title based on visualization type using actual DCIDs
+        if viz_type == 'ranking':
+            # Ranking of [variable] by [place_type]
+            variable = variable_dcids[0] if variable_dcids else "metric"
+            # Determine place type from extracted values or places
+            place_type = extracted_values.get('place_type', extracted_values.get('place-type', 'regions'))
+            if 'place' in extracted_values:
+                place = extracted_values.get('place')
+                return f"Ranking of {variable} by {place_type} in {place}"
+            return f"Ranking of {variable} by {place_type}"
+            
+        elif viz_type == 'map':
+            # Map of [variable] across [place_type]
+            variable = variable_dcids[0] if variable_dcids else "metric"
+            place_type = extracted_values.get('place_type', extracted_values.get('place-type', 'counties'))
+            return f"Map of {variable} across {place_type}"
+            
+        elif viz_type == 'bar':
+            # Comparison of [variable]: [place1] vs [place2]
+            variable = variable_dcids[0] if variable_dcids else "metric"
+            # For bar charts, we should use the actual place names from extracted values
+            if 'county_a' in extracted_values and 'county_b' in extracted_values:
+                return f"Comparison of {variable}: {extracted_values['county_a']} vs {extracted_values['county_b']}"
+            elif len(place_dcids) >= 2:
+                # Use place DCIDs if we have them
+                return f"Comparison of {variable}"
+            return f"Comparison of {variable}"
+            
+        elif viz_type == 'line':
+            # Trend of [variable] over time
+            variable = variable_dcids[0] if variable_dcids else "metric"
+            # For line charts, typically show trend over time
+            return f"Trend of {variable} over time"
+            
+        elif viz_type == 'scatter':
+            # Correlation: [variable1] vs [variable2] across [place_type]
+            if len(variable_dcids) >= 2:
+                variable1 = variable_dcids[0]
+                variable2 = variable_dcids[1]
+            else:
+                variable1 = variable_dcids[0] if variable_dcids else 'Variable 1'
+                variable2 = 'Variable 2'
+            place_type = extracted_values.get('place_type', extracted_values.get('place-type', 'regions'))
+            return f"Correlation: {variable1} vs {variable2} across {place_type}"
+            
+        elif viz_type == 'highlight':
+            # [variable] in [place]
+            variable = variable_dcids[0] if variable_dcids else extracted_values.get('variable', 'metric')
+            # For highlight, use the extracted place name if available
+            place = extracted_values.get('place', 'location')
+            return f"{variable} in {place}"
+        
+        # Default: use visualization type as title
+        return viz_type.capitalize()
     
     async def process_template(self, match: Dict, query: str) -> Optional[Dict]:
         """Process a single template match."""
@@ -319,7 +397,35 @@ class StatisticsHandler():
             return None
             
         template = match['template']
+        
+        # Skip templates without visualization hints
+        if not template.get('visualization_hints'):
+            print(f"  Template {template['id']} - Skipping - no visualization hints")
+            return None
+            
         extracted_values = match.get('extracted_values', {})
+        # Check for empty lists in extracted values
+        if any(isinstance(v, list) and not v for v in extracted_values.values()):
+            print(f"  Template {template['id']} - Skipping - empty list found in extracted values")
+            return None
+            
+        # Check if all required template parameters have been properly extracted
+        # A parameter is required if it's defined in the template variables
+        template_vars = template.get('variables', {})
+        for var_name in template_vars.keys():
+            if var_name == 'score':  # Skip the score field
+                continue
+            # Check if the variable was extracted and has a meaningful value
+            if var_name not in extracted_values or not extracted_values[var_name]:
+                print(f"  Template {template['id']} - Skipping - missing required parameter '{var_name}'")
+                return None
+            # Check for placeholder values that indicate failed extraction
+            value = str(extracted_values[var_name]).strip()
+            if value in ['US', 'US counties', 'counties'] and var_name == 'place' and template['id'] == '7':
+                # For template 7, "US" alone is not a valid specific place
+                print(f"  Template {template['id']} - Skipping - '{var_name}' has generic value '{value}'")
+                return None
+            
         print(f"\nProcessing template {template['id']} (score: {match['score']}): {template['pattern']}")
         print(f"  Extracted values: {extracted_values}")
         
@@ -328,11 +434,35 @@ class StatisticsHandler():
             variables = []
             places = []
             
+            # Check if all required template variables have valid values
+            # Skip templates with placeholder/invalid values
+            # These are generic placeholders that indicate extraction failure
+            invalid_placeholders = {'<variable1>', '<variable2>', '<place>', '<county>', 
+                                  '<state>', '<city>', '<variable>', '<place-type>', ''}
+            
+            has_invalid = False
             for key, value in extracted_values.items():
+                # Check if the value is invalid or a placeholder
+                if not value or str(value).strip() in invalid_placeholders or str(value).startswith('<'):
+                    print(f"  Template {template['id']} - Skipping - invalid/placeholder value for {key}: '{value}'")
+                    has_invalid = True
+                    break
+                
+                # For place-type parameters, valid values include: county, state, city, zip code, etc.
+                # These should NOT be considered invalid
+                
                 if 'variable' in key.lower():
                     variables.append(value)
-                elif any(place_type in key.lower() for place_type in ['county', 'place', 'state', 'city']):
+                elif 'place-type' in key.lower() or 'place_type' in key.lower():
+                    # This is a place type (e.g., "counties", "states"), not a place
+                    # Don't add to places list - it will be used for childPlaceType parameter
+                    pass
+                elif any(place_name in key.lower() for place_name in ['county', 'place', 'state', 'city', 'containing']):
                     places.append(value)
+            
+            # Skip this template if it has invalid values
+            if has_invalid:
+                return None
             
             print(f"  Template {template['id']} - Variables: {variables}, Places: {places}")
             
@@ -344,14 +474,20 @@ class StatisticsHandler():
             if not variable_dcids:
                 print(f"  Template {template['id']} - Skipping - no variables extracted")
                 return None
+
+            # Default to US if no places extracted
+            if not place_dcids:
+                place_dcids = ['country/USA']
+                print(f"  Template {template['id']} - Defaulting to US for place")
             
             # Step 4: Determine visualization type
-            query_type = self.params.get('query_type', 'single_value')
-            viz_type = await self.determine_visualization_type(
-                query_type, 
-                len(variable_dcids), 
-                len(place_dcids)
-            )
+            template_hints = template.get('visualization_hints', [])
+            viz_type = self.determine_visualization_type(template_hints)
+            
+            if viz_type is None:
+                print(f"  Template {template['id']} - Skipping - no visualization type determined")
+                return None
+                
             print(f"  Template {template['id']} - Visualization type: {viz_type}")
             
             # Step 5: Create web component
@@ -359,12 +495,12 @@ class StatisticsHandler():
             if 'limit' in self.params and self.params['limit']:
                 additional_params['limit'] = self.params['limit']
             
-            # Determine title based on confidence score
-            if match['score'] >= 80:
-                title = query
-            else:
-                # For lower confidence matches, indicate it might be related
-                title = f"{query} (Related: {template['pattern']})"
+            # Generate title from visualization hints and actual DCIDs
+            title = self.generate_title_from_hint(template_hints, extracted_values, variable_dcids, place_dcids)
+            
+            # If title generation failed or returned empty, use a fallback
+            if not title:
+                title = f"{viz_type.capitalize()} visualization"
                 
             component_html = self.create_web_component(
                 viz_type,
@@ -398,6 +534,9 @@ class StatisticsHandler():
     def create_web_component(self, component_type: str, places: List[str], variables: List[str], 
                            title: str = "", query_params: Optional[Dict] = None) -> str:
         """Create the HTML for a Data Commons web component."""
+        # Add 'datacommons-' prefix to component type
+        component_type = f'datacommons-{component_type}'
+        
         # Convert lists to space-separated strings (Data Commons web components use spaces, not commas)
         places_str = ' '.join(places) if places else ""
         variables_str = ' '.join(variables) if variables else ""
@@ -525,17 +664,24 @@ class StatisticsHandler():
             # Filter out None results and deduplicate
             all_components = []
             seen_components = set()
+            seen_html = set()  # Track HTML to avoid exact duplicates
             
             for component in template_results:
                 if component is None:
                     continue
                     
-                # Skip if we've already generated this exact component
+                # Skip if we've already generated this exact component (by key)
                 if component['component_key'] in seen_components:
-                    print(f"  Skipping duplicate component: {component['component_key']}")
+                    print(f"  Skipping duplicate component by key: {component['component_key']}")
+                    continue
+                    
+                # Also skip if the HTML is exactly the same
+                if component['html'] in seen_html:
+                    print(f"  Skipping duplicate component with identical HTML")
                     continue
                     
                 seen_components.add(component['component_key'])
+                seen_html.add(component['html'])
                 # Remove the component_key from the stored data
                 del component['component_key']
                 all_components.append(component)
@@ -552,6 +698,7 @@ class StatisticsHandler():
             
             message = {
                 "message_type": "statistics_result",
+                "@type": "StatisticalAnalysis",
                 "content": f"Found {len(all_components)} matching visualizations for your query:",
                 "all_components": [
                     {
@@ -588,7 +735,7 @@ class StatisticsHandler():
             }
             
             # Send the message
-            await self.handler.send_message(message)
+            asyncio.create_task(self.handler.send_message(message))
             
             # Also send a chart result message with all components
             all_html = []
@@ -601,6 +748,7 @@ class StatisticsHandler():
             
             chart_message = {
                 "message_type": "chart_result",
+                "@type": "DataVisualization",
                 "html": f"""
 <!-- Data Commons Web Components ({len(all_components)} visualizations) -->
 {chr(10).join(all_html)}
@@ -611,7 +759,7 @@ class StatisticsHandler():
 <!-- Total Components: {len(all_components)} -->
 """.strip()
             }
-            await self.handler.send_message(chart_message)
+            asyncio.create_task(self.handler.send_message(chart_message))
             
             self.sent_message = True
             
@@ -622,9 +770,9 @@ class StatisticsHandler():
     async def _send_error_message(self, error_text: str):
         """Send an error message to the user."""
         if not self.sent_message:
-            await self.handler.send_message({
+            asyncio.create_task(self.handler.send_message({
                 "message_type": "error",
                 "content": error_text,
                 "error": True
-            })
+            }))
             self.sent_message = True

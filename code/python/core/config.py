@@ -57,47 +57,7 @@ class RetrievalProviderConfig:
     db_type: Optional[str] = None
     use_knn: Optional[bool] = None
     enabled: bool = False
-    vector_type: Optional[str] = None
-
-
-@dataclass
-class ConversationStorageConfig:
-    type: str = "qdrant"
-    enabled: bool = True
-    # Common fields
-    api_key: Optional[str] = None
-    url: Optional[str] = None
-    endpoint: Optional[str] = None
-    database_path: Optional[str] = None
-    collection_name: Optional[str] = None
-    database_name: Optional[str] = None
-    container_name: Optional[str] = None
-    table_name: Optional[str] = None
-    # Connection details
-    host: Optional[str] = None
-    port: Optional[int] = None
-    user: Optional[str] = None
-    password: Optional[str] = None
-    connection_string: Optional[str] = None
-    # Other settings
-    vector_size: int = 1536
-    vector_dimensions: int = 1536
-    partition_key: Optional[str] = None
-    max_conversations: Optional[int] = None
-    ttl_seconds: Optional[int] = None
-
-@dataclass 
-class StorageBehaviorConfig:
-    store_anonymous: bool = True
-    max_conversations_per_thread: int = 100
-    max_threads_per_user: int = 1000
-    retention_days: int = 365
-    compute_embeddings: bool = True
-    batch_size: int = 100
-    enable_search: bool = True
-    auto_migrate_on_login: bool = True
-    max_migrate_conversations: int = 500  
-
+    vector_type: Optional[Dict[str, Any]] = None
 @dataclass
 class SSLConfig:
     enabled: bool = False
@@ -138,7 +98,10 @@ class NLWebConfig:
     analyze_query_enabled: bool = False  # Enable or disable query analysis
     decontextualize_enabled: bool = True  # Enable or disable decontextualization
     required_info_enabled: bool = True  # Enable or disable required info checking
+    aggregation_enabled: bool = False  # Enable or disable aggregation functionality
+    who_endpoint_enabled: bool = True  # Enable or disable the who endpoint
     api_keys: Dict[str, str] = field(default_factory=dict)  # API keys for external services
+    who_endpoint: str = "http://localhost:8000/who"  # Endpoint for /who requests
 
 @dataclass
 class ConversationStorageConfig:
@@ -166,6 +129,9 @@ class ConversationStorageConfig:
     partition_key: Optional[str] = None
     max_conversations: Optional[int] = None
     ttl_seconds: Optional[int] = None
+    vector_type: Optional[Dict[str, Any]] = None
+    rrf: Optional[Dict[str, Any]] = None
+    knn: Optional[Dict[str, Any]] = None
 
 @dataclass
 class StorageBehaviorConfig:
@@ -510,6 +476,15 @@ class AppConfig:
         # Load required info enabled flag
         required_info_enabled = self._get_config_value(data.get("required_info_enabled"), True)
         
+        # Load aggregation enabled flag
+        aggregation_enabled = self._get_config_value(data.get("aggregation_enabled"), False)
+        
+        # Load who endpoint enabled flag
+        who_endpoint_enabled = self._get_config_value(data.get("who_endpoint_enabled"), True)
+        
+        # Load who_endpoint from config
+        who_endpoint = self._get_config_value(data.get("who_endpoint"), "http://localhost:8000/who")
+        
         # Load headers from config
         headers = data.get("headers", {})
         
@@ -544,7 +519,10 @@ class AppConfig:
             analyze_query_enabled=analyze_query_enabled,
             decontextualize_enabled=decontextualize_enabled,
             required_info_enabled=required_info_enabled,
-            api_keys=api_keys
+            aggregation_enabled=aggregation_enabled,
+            who_endpoint_enabled=who_endpoint_enabled,
+            api_keys=api_keys,
+            who_endpoint=who_endpoint
         )
     
     def get_chatbot_instructions(self, instruction_type: str = "search_results") -> str:
@@ -652,6 +630,14 @@ class AppConfig:
     def is_required_info_enabled(self) -> bool:
         """Check if required info checking is enabled."""
         return self.nlweb.required_info_enabled if hasattr(self, 'nlweb') else True
+    
+    def is_aggregation_enabled(self) -> bool:
+        """Check if aggregation functionality is enabled."""
+        return self.nlweb.aggregation_enabled if hasattr(self, 'nlweb') else False
+    
+    def is_who_endpoint_enabled(self) -> bool:
+        """Check if the who endpoint is enabled."""
+        return self.nlweb.who_endpoint_enabled if hasattr(self, 'nlweb') else True
     
     def load_sites_config(self, path: str = "sites.xml"):
         """Load site configurations from XML file."""
@@ -833,7 +819,10 @@ class AppConfig:
                     vector_dimensions=cfg.get("vector_dimensions", 1536),
                     partition_key=cfg.get("partition_key"),
                     max_conversations=cfg.get("max_conversations"),
-                    ttl_seconds=cfg.get("ttl_seconds")
+                    ttl_seconds=cfg.get("ttl_seconds"),
+                    vector_type=cfg.get("vector_type"),
+                    rrf=cfg.get("rrf"),
+                    knn=cfg.get("knn")
                 )
                 
                 self.conversation_storage_endpoints[name] = storage_config
