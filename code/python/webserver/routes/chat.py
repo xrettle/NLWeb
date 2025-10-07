@@ -1488,9 +1488,7 @@ async def sse_message_handler(request: web.Request) -> web.StreamResponse:
             # Send timeout notification
             await response.write(b'data: {"type": "timeout", "message": "Response timeout"}\n\n')
 
-        # Send final completion
-        print(f"[SSE] Sending completion message")
-        await response.write(b'data: {"message_type": "complete"}\n\n')
+        # No longer send complete message - end-nlweb-response is sent by handler
 
         print(f"[SSE] Returning response")
         return response

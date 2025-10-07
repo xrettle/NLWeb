@@ -31,10 +31,13 @@ class QueryRewrite(PromptRunner):
         Rewrite the decontextualized query into simpler keyword queries.
         The results are stored in handler.rewritten_queries.
         """
-        # Wait for decontextualization to complete since we need the decontextualized query
+        # Skip query rewrite for sites that don't support standard retrieval
         if not site_supports_standard_retrieval(self.handler.site):
+            self.handler.rewritten_queries = [self.handler.query]
             await self.handler.state.precheck_step_done(self.STEP_NAME)
+            return
 
+        # Wait for decontextualization to complete since we need the decontextualized query
         await self.handler.state._decon_event.wait()
 
         

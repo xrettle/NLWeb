@@ -23,24 +23,24 @@ export const SITE_SAMPLE_QUERIES = {
     "Best fruit based dessert recipes for summer entertaining and picnics",
     "Neapolitan style pizza dough recipe with overnight cold fermentation method"
   ],
-  "datacommons": [
-    "What is the population growth rate of California counties since 2010",
-    "Compare median household income across all states in the northeast region",
-    "Crime statistics and trends in major US cities over the past decade"
-  ],
+ // "datacommons": [
+  //  "What is the population growth rate of California counties since 2010",
+ //   "Compare median household income across all states in the northeast region",
+ //   "Crime statistics and trends in major US cities over the past decade"
+ // ],
   "imdb": [
-    "Best science fiction movies released in 2023 with high audience ratings",
-    "Top rated TV shows in the mystery thriller genre from recent years",
-    "Complete list of Christopher Nolan movies ranked by box office performance"
+    "Best science fiction movies not featuring aliens",
+    "Movies about cooking, eating and food, set in a family context",
+    "Movies that portray AI in a good light"
   ],
   "kettl.co": [
     "High quality Japanese green tea varieties for daily morning consumption",
     "Ceremonial grade matcha powder for traditional tea ceremony preparation",
     "Essential tea brewing accessories for preparing authentic Japanese teas at home"
   ],
-  "masuhome.com": [
-    "Traditional Japanese home decor items for creating zen living spaces",
-    "Minimalist furniture pieces inspired by Japanese interior design principles",
-    "Japanese style lighting fixtures for creating warm ambient atmosphere indoors"
+  "hebbarskitchen": [
+    "Alternate dosa batters",
+    "diabetic friendly south indian snacks",
+    "Udipi-chinese fusion recipes"
   ]
 };

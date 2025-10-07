@@ -275,7 +275,6 @@
         this.eventSource = null;
         this.allResults = []; // Accumulate all results for re-sorting
         this.aiResponses = []; // Keep AI responses separate
-        this.queryHistory = []; // Track query history for context
 
         // Initialize UI helper
         this.uiHelper = new ChatUICommon({
@@ -332,34 +331,18 @@
         if (!query || this.isProcessing) return;
 
         this.isProcessing = true;
+        this.hasReceivedBeginMessage = false;  // Track if we received begin-nlweb-response
+        this.hasReceivedEndMessage = false;    // Track if we received end-nlweb-response
         this.queryButton.disabled = true;
         this.queryButton.textContent = 'Searching...';
-        
-        // Add current query to history (will be added after successful response)
-        const currentQuery = query;
-        
-        // Show query in results with previous queries for context
+
+        // Show query in results
         this.resultsContainer.innerHTML = '';
-        
-        // Display conversation history
-        if (this.queryHistory.length > 0) {
-          const historyDiv = document.createElement('div');
-          historyDiv.style.cssText = 'margin-bottom: 20px; padding: 10px; background: #f9f9f9; border-radius: 8px;';
-          
-          this.queryHistory.forEach((q, idx) => {
-            const queryDiv = document.createElement('div');
-            queryDiv.style.cssText = 'margin-bottom: 8px; color: #666;';
-            queryDiv.innerHTML = `<strong>Previous Q${idx + 1}:</strong> ${this.escapeHtml(q)}`;
-            historyDiv.appendChild(queryDiv);
-          });
-          
-          this.resultsContainer.appendChild(historyDiv);
-        }
-        
+
         // Display current query
         const currentQueryDiv = document.createElement('div');
         currentQueryDiv.style.cssText = 'margin-bottom: 20px; padding: 12px; background: #e3f2fd; border-radius: 8px; font-weight: 500;';
-        currentQueryDiv.innerHTML = `<strong>Current Query:</strong> ${this.escapeHtml(currentQuery)}`;
+        currentQueryDiv.innerHTML = `<strong>Current Query:</strong> ${this.escapeHtml(query)}`;
         this.resultsContainer.appendChild(currentQueryDiv);
         
         // Add loading indicator
@@ -386,17 +369,11 @@
             this.eventSource.close();
           }
 
-          // Create URL with query parameters including previous queries
+          // Create URL with query parameters
           const params = new URLSearchParams({
             query: query,
             streaming: 'true'  // Use streaming mode
           });
-          
-          // Add previous queries for context (limit to last 3 queries)
-          if (this.queryHistory.length > 0) {
-            const recentQueries = this.queryHistory.slice(-3);
-            params.append('prev_queries', JSON.stringify(recentQueries));
-          }
 
           const url = `/who?${params.toString()}`;
           
@@ -423,8 +400,7 @@
               
               // Handle different message types
               if (data.message_type === 'complete') {
-                // Stream is complete - add query to history
-                this.queryHistory.push(currentQuery);
+                // Stream is complete
                 // Clear the input for next query
                 this.queryInput.value = '';
                 this.cleanup();  // Use cleanup to properly reset state
@@ -452,9 +428,16 @@
           };
           
           this.eventSource.onerror = (error) => {
-            console.error('EventSource error:', error);
-            this.handleError('Connection error occurred');
-            this.eventSource.close();
+            // Only show error if we started receiving data but didn't get a proper end message
+            // If we never got a begin message, it's a connection failure
+            // If we got a begin but no end, the stream was interrupted
+            if (!this.hasReceivedBeginMessage || (this.hasReceivedBeginMessage && !this.hasReceivedEndMessage)) {
+              console.error('EventSource error:', error);
+              this.handleError('Connection error occurred');
+            }
+            if (this.eventSource) {
+              this.eventSource.close();
+            }
             this.isProcessing = false;  // Reset processing flag
             this.queryButton.disabled = false;
             this.queryButton.textContent = 'Search';
@@ -475,9 +458,17 @@
           return;
         }
 
-        if (message.message_type === 'complete' || message.message_type === 'end-nlweb-response') {
+        if (message.message_type === 'begin-nlweb-response') {
+          this.hasReceivedBeginMessage = true;
+          console.log('Received begin-nlweb-response');
+          return;
+        }
+
+        if (message.message_type === 'end-nlweb-response') {
+          this.hasReceivedEndMessage = true;
+          console.log('Received end-nlweb-response');
           this.cleanup();
-          
+
           // Check if no results were received
           if (this.allResults.length === 0 && this.aiResponses.length === 0) {
             this.resultsContainer.innerHTML = `

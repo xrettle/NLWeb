@@ -15,16 +15,17 @@ from core.schemas import create_assistant_result
 
 logger = get_configured_logger("who_ranking_engine")
 
+DEBUG_PRINT = False
 
 class WhoRanking:
     
     EARLY_SEND_THRESHOLD = 59
     NUM_RESULTS_TO_SEND = 10
 
-    def __init__(self, handler, items, level="low"):
+    def __init__(self, handler, items, level="high"): # default to high level for WHO ranking
         logger.info(f"Initializing WHO Ranking with {len(items)} items")
         self.handler = handler
-        self.level = level  # default to high level for WHO ranking
+        self.level = level  
         self.items = items
         self.num_results_sent = 0
         self.rankedAnswers = []
@@ -33,8 +34,14 @@ class WhoRanking:
         """Construct the WHO ranking prompt with the given query and site description."""
         prompt = f"""Assign a score between 0 and 100 to the following site based 
         the likelihood that the site will contain an answer to the user's question.
+       
+        First think about the kind of thing the user is seeking and then verify that the 
+        site is primarily focussed on that kind of thing.
+
         If the user is looking to buy a product, the site should sell the product, not 
-        just have useful information. 
+        just have useful information.
+        If the user is looking for information, the site should focus on that kind of information.
+
 
 The user's question is: {query}
 
@@ -55,7 +62,7 @@ The site's description is: {site_description}
             description = trim_json(json_str)
             prompt, ans_struc = self.get_ranking_prompt(self.handler.query, description)
             ranking = await ask_llm(prompt, ans_struc, level=self.level, 
-                                    query_params=self.handler.query_params, timeout=90)
+                                    query_params=self.handler.query_params, timeout=8)
             
             # Ensure ranking has required fields (handle LLM failures/timeouts)
             if not ranking or not isinstance(ranking, dict):
@@ -166,15 +173,52 @@ The site's description is: {site_description}
         filtered = [r for r in self.rankedAnswers if r.get('ranking', {}).get('score', 0) > 70]
         ranked = sorted(filtered, key=lambda x: x.get('ranking', {}).get("score", 0), reverse=True)
         self.handler.final_ranked_answers = ranked[:self.NUM_RESULTS_TO_SEND]
-        
-        print(f"\n=== WHO RANKING: Filtered to {len(filtered)} results with score > 70 ===")
-        
-        # Print the ranked sites with scores
-        print("\nRanked sites (top 10):")
-        for i, r in enumerate(ranked[:self.NUM_RESULTS_TO_SEND], 1):
-            score = r.get('ranking', {}).get('score', 0)
-            print(f"  {i}. {r['name']} - Score: {score}")
-        print("=" * 60)
+
+        if (DEBUG_PRINT):
+            print(f"\n=== WHO RANKING: Filtered to {len(filtered)} results with score > 70 ===")
+
+            # Print the ranked sites with scores
+            print("\nRanked sites (top 10):")
+            for i, r in enumerate(ranked[:self.NUM_RESULTS_TO_SEND], 1):
+                score = r.get('ranking', {}).get('score', 0)
+                print(f"  {i}. {r['name']} - Score: {score}")
+            print("=" * 60)
+
+            # Print sites that were not returned
+            print("\n=== SITES NOT RETURNED (sorted by score) ===")
+
+            # Get all sites that were not included in the top 10
+            not_returned_high_score = ranked[self.NUM_RESULTS_TO_SEND:]  # Sites with score > 70 but beyond top 10
+            not_returned_low_score = [r for r in self.rankedAnswers if r.get('ranking', {}).get('score', 0) <= 70]
+
+            # Sort low score sites by score (descending)
+            not_returned_low_score = sorted(not_returned_low_score,
+                                       key=lambda x: x.get('ranking', {}).get("score", 0),
+                                       reverse=True)
+
+            # Combine both lists
+            all_not_returned = not_returned_high_score + not_returned_low_score
+
+            if all_not_returned:
+                print(f"\nTotal sites not returned: {len(all_not_returned)}")
+
+            # Print sites with score > 70 that didn't make top 10
+                if not_returned_high_score:
+                    print(f"\nSites with score > 70 but beyond top {self.NUM_RESULTS_TO_SEND}:")
+                    for i, r in enumerate(not_returned_high_score, 1):
+                        score = r.get('ranking', {}).get('score', 0)
+                        print(f"  {i}. {r['name']} - Score: {score}")
+
+            # Print sites with score <= 70
+                if not_returned_low_score:
+                    print(f"\nSites with score <= 70:")
+                    for i, r in enumerate(not_returned_low_score, 1):
+                        score = r.get('ranking', {}).get('score', 0)
+                        print(f"  {i}. {r['name']} - Score: {score}")
+            else:
+                print("All retrieved sites were returned to the user.")
+
+            print("=" * 60)
         
         # Final ranked results processed
         
