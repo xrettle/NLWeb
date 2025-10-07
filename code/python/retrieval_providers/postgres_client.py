@@ -40,6 +40,7 @@ class PgVectorClient(RetrievalClientBase):
     """
     
     def __init__(self, endpoint_name: Optional[str] = None):
+        super().__init__()  # Initialize the base class with caching
         """
         Initialize the PostgreSQL vector database client.
         
@@ -354,7 +355,6 @@ class PgVectorClient(RetrievalClientBase):
                     
                     # Build and execute the query
                     query = f"""
-        super().__init__()  # Initialize the base class with caching
                         INSERT INTO {self.table_name} (id, url, name, schema_json, site, embedding)
                         VALUES {', '.join(placeholders)}
                         ON CONFLICT (id) DO UPDATE SET
