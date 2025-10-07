@@ -85,9 +85,8 @@ async def handle_streaming_ask(request: web.Request, query_params: Dict[str, Any
             from core.baseHandler import NLWebHandler
             handler = NLWebHandler(query_params, wrapper)
             await handler.runQuery()
-        
-        # Send completion message
-        await wrapper.write_stream({"message_type": "complete", "sender_info": {"id": "system", "name": "NLWeb"}})
+
+        # Handler already sends end-nlweb-response, no need for additional complete message
         
     except Exception as e:
         logger.error(f"Error in streaming ask handler: {e}", exc_info=True)
@@ -159,9 +158,8 @@ async def who_handler(request: web.Request) -> web.Response:
                 # Run the who handler with streaming
                 handler = WhoHandler(query_params, wrapper)
                 await handler.runQuery()
-                
-                # Send completion message
-                await wrapper.write_stream({"message_type": "complete", "sender_info": {"id": "system", "name": "NLWeb"}})
+
+                # Handler already sends end-nlweb-response, no need for additional complete message
                 
             except Exception as e:
                 logger.error(f"Error in streaming who handler: {e}", exc_info=True)

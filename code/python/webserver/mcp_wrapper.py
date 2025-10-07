@@ -53,18 +53,19 @@ class MCPHandler:
         is_notification = request_id is None
         
         logger.info(f"MCP request: method={method}, id={request_id}, is_notification={is_notification}")
-        print(f"=== MCP REQUEST: method={method}, id={request_id}, initialized={self.initialized}, handler_id={id(self)} ===")
-        
+        # Commented out verbose logging
+        # print(f"=== MCP REQUEST: method={method}, id={request_id}, initialized={self.initialized}, handler_id={id(self)} ===")
+
         try:
             # Route based on method
             if method == "initialize":
                 result = await self.handle_initialize(params)
-                print(f"=== INITIALIZE COMPLETE, sending response ===")
+                # print(f"=== INITIALIZE COMPLETE, sending response ===")
             elif method == "initialized" or method == "notifications/initialized":
                 # This is a notification, no response needed
                 self.initialized = True
                 logger.info("MCP server initialized")
-                print(f"=== SERVER MARKED AS INITIALIZED ===")
+                # print(f"=== SERVER MARKED AS INITIALIZED ===")
                 if not is_notification:
                     result = {"status": "ok"}
                 else:
@@ -76,7 +77,7 @@ class MCPHandler:
                 logger.info(f"tools/list called, initialized={self.initialized}")
                 result = await self.handle_tools_list(params)
             elif method == "tools/call":
-                print(f"=== TOOLS/CALL: initialized={self.initialized} ===")
+                # print(f"=== TOOLS/CALL: initialized={self.initialized} ===")
                 # Remove the initialization check - MCP clients might not send initialize first
                 # if not self.initialized:
                 #     raise Exception("Server not initialized")
@@ -292,14 +293,15 @@ class MCPHandler:
         arguments = params.get("arguments", {})
         
         logger.info(f"MCP tool call: {tool_name} with args: {arguments}")
-        print(f"=== TOOL CALL: {tool_name} ===")
-        print(f"Arguments: {json.dumps(arguments, indent=2)}")
+        # Commented out verbose logging
+        # print(f"=== TOOL CALL: {tool_name} ===")
+        # print(f"Arguments: {json.dumps(arguments, indent=2)}")
         
         if tool_name == "ask":
             # Handle the main query tool
             query = arguments.get("query", "")
-            print(f"=== PROCESSING ASK TOOL ===")
-            print(f"Query: {query}")
+            # print(f"=== PROCESSING ASK TOOL ===")
+            # print(f"Query: {query}")
             sites = arguments.get("site", [])
             generate_mode = arguments.get("generate_mode", "list")
             
@@ -309,10 +311,9 @@ class MCPHandler:
             if sites:
                 query_params["site"] = sites if isinstance(sites, list) else [sites]
             query_params["generate_mode"] = [generate_mode] if generate_mode else ["list"]
-            
-            print(f"=== QUERY PARAMS BEING PASSED ===")
-            print(f"query_params: {query_params}")
-            
+            # print(f"=== QUERY PARAMS BEING PASSED ===")
+            # print(f"query_params: {query_params}")
+
             # Create a response accumulator
             response_content = []
             
@@ -331,14 +332,14 @@ class MCPHandler:
             capture_chunk = ChunkCapture()
             
             # Process the query using NLWebHandler with a timeout
-            print(f"=== CREATING NLWebHandler ===")
-            print(f"Query params: {query_params}")
+            # print(f"=== CREATING NLWebHandler ===")
+            # print(f"Query params: {query_params}")
             handler = NLWebHandler(query_params, capture_chunk)
             try:
-                print(f"=== CALLING handler.runQuery() ===")
+                # print(f"=== CALLING handler.runQuery() ===")
                 # Add a 30-second timeout for MCP requests
                 result = await asyncio.wait_for(handler.runQuery(), timeout=30.0)
-                print(f"=== HANDLER RETURNED: {result} ===")
+                # print(f"=== HANDLER RETURNED: {result} ===")
             except asyncio.TimeoutError:
                 logger.warning("MCP tool call timed out after 30 seconds")
                 return {
@@ -533,10 +534,11 @@ async def handle_mcp_request(query_params, body, send_response, send_chunk, stre
         if body:
             try:
                 request_data = json.loads(body)
-                print(f"\n=== INCOMING MCP REQUEST ===")
-                print(f"Body: {json.dumps(request_data, indent=2)}")
-                print(f"===========================\n")
-                
+                # Commented out verbose logging
+                # print(f"\n=== INCOMING MCP REQUEST ===")
+                # print(f"Body: {json.dumps(request_data, indent=2)}")
+                # print(f"===========================\n")
+
                 # Validate JSON-RPC format
                 if "jsonrpc" not in request_data:
                     request_data["jsonrpc"] = "2.0"

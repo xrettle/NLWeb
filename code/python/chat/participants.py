@@ -313,22 +313,20 @@ class NLWebParticipant(BaseParticipant):
             
             # If we streamed the response, create a message for storage
             if response_sent:
-                # Send a completion message just like HTTP streaming
-                if websocket_manager:
-                    completion_message = {
-                        'message_type': 'complete',
-                        'timestamp': int(time.time() * 1000),
-                        'sender_info': {'id': 'system', 'name': 'NLWeb'}
-                    }
-                    await websocket_manager.broadcast_message(conversation_id, completion_message)
-                
+                # No longer send complete message - end-nlweb-response is sent by handler
+
                 # Store the conversation exchange
-                user_id = message.sender_info.get('id')
+                # Handle both dict and string sender_info
+                if isinstance(message.sender_info, dict):
+                    user_id = message.sender_info.get('id')
+                else:
+                    user_id = message.sender_info
                 await self.storeConversationExchange(handler, user_id, conversation_id)
         
             
         except asyncio.TimeoutError:
-            logger.warning(f"NLWeb timeout processing message from {message.sender_info.get('id')}")
+            sender_id = message.sender_info.get('id') if isinstance(message.sender_info, dict) else message.sender_info
+            logger.warning(f"NLWeb timeout processing message from {sender_id}")
             raise
         except QueueFullError:
             # Handle queue full gracefully
