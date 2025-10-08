@@ -47,6 +47,12 @@ export class UnifiedChatInterface {
     };
     
     this.init();
+    
+    // Make interface available globally for testing and debugging
+    if (!window.nlwebChat) {
+      window.nlwebChat = {};
+    }
+    window.nlwebChat.chatInterface = this;
   }
   
   async init() {
@@ -1084,6 +1090,24 @@ export class UnifiedChatInterface {
         console.error('Invalid DOM element in result message');
         return;
       }
+
+      // Additional security validation: ensure the element came from our controlled process
+      if (!data._domElement.classList.contains('search-results')) {
+        console.error('DOM element does not have expected security marker class');
+        return;
+      }
+
+      // Sanitize the DOM element to remove any potentially harmful content
+      this.sanitizeDomElement(data._domElement);
+
+      // Additional security validation: ensure the element came from our controlled process
+      if (!data._domElement.classList.contains('search-results')) {
+        console.error('DOM element does not have expected security marker class');
+        return;
+      }
+
+      // Sanitize the DOM element to remove any potentially harmful content
+      this.sanitizeDomElement(data._domElement);
 
       // Find or create the main search-results container
       let mainContainer = textDiv.querySelector('.search-results');
@@ -2200,6 +2224,36 @@ export class UnifiedChatInterface {
     
     document.body.appendChild(backdrop);
     document.body.appendChild(modal);
+  }
+
+  /**
+   * Sanitize DOM element to remove potentially harmful content
+   * @param {Element} element - The DOM element to sanitize
+   */
+  sanitizeDomElement(element) {
+    // Remove any script tags
+    const scripts = element.querySelectorAll('script');
+    scripts.forEach(script => script.remove());
+    
+    // Remove any event handler attributes
+    const allElements = element.querySelectorAll('*');
+    allElements.forEach(el => {
+      // Remove all event handler attributes (onclick, onload, etc.)
+      const attributes = [...el.attributes];
+      attributes.forEach(attr => {
+        if (attr.name.toLowerCase().startsWith('on')) {
+          el.removeAttribute(attr.name);
+        }
+      });
+      
+      // Remove javascript: protocols from href and src attributes
+      ['href', 'src', 'action'].forEach(attrName => {
+        const attrValue = el.getAttribute(attrName);
+        if (attrValue && attrValue.toLowerCase().includes('javascript:')) {
+          el.removeAttribute(attrName);
+        }
+      });
+    });
   }
 }
 
