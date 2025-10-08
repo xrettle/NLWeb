@@ -18,6 +18,10 @@ from misc.logger.logging_config_helper import get_configured_logger
 
 logger = get_configured_logger("shopify_mcp")
 
+# Cache for MCP call results
+# Key: (site, query), Value: list of results
+_mcp_results_cache = {}
+
 
 class ShopifyMCPClient(RetrievalClientBase):
     """
@@ -144,6 +148,16 @@ class ShopifyMCPClient(RetrievalClientBase):
         Returns:
             List of search results formatted as [url, schema_json, name, site]
         """
+        # Check cache first
+        cache_key = (site, query)
+        if cache_key in _mcp_results_cache:
+            logger.debug(f"Cache hit for Shopify MCP query: {query} on {site}")
+            cached_results = _mcp_results_cache[cache_key]
+            print(f"[SHOPIFY_MCP] Query '{query}' to {site}: {len(cached_results)} results (cached)")
+            return cached_results[:num_results]
+
+        logger.debug(f"Cache miss for Shopify MCP query: {query} on {site}")
+
         # Construct the MCP endpoint URL based on the site
         endpoint = f"https://{site}/api/mcp"
         
@@ -213,14 +227,19 @@ class ShopifyMCPClient(RetrievalClientBase):
                                     # Parse the text as JSON
                                     search_data = json.loads(content_item['text'])
                                     formatted = self._format_results(search_data, site)
+                                    # Cache the results
+                                    _mcp_results_cache[cache_key] = formatted
                                     # Print query and results on one line
                                     print(f"[SHOPIFY_MCP] Query '{query}' to {site}: {len(formatted)} results")
                                     return formatted
                                 except json.JSONDecodeError:
                                     logger.error(f"Failed to parse search results from content text")
-                    
+
                     # Otherwise try direct format
                     formatted = self._format_results(mcp_result, site)
+
+                    # Cache the results
+                    _mcp_results_cache[cache_key] = formatted
 
                     # Print query and results on one line
                     print(f"[SHOPIFY_MCP] Query '{query}' to {site}: {len(formatted)} results")

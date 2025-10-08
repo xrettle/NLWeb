@@ -377,7 +377,6 @@ class BingSearchClient(RetrievalClientBase):
             # Use rewritten queries if available and multiple queries exist
             if rewritten_queries and len(rewritten_queries) > 1:
                 logger.info(f"Using {len(rewritten_queries)} rewritten queries for Bing search: {rewritten_queries}")
-                print(f"[BING_SEARCH] Using {len(rewritten_queries)} rewritten queries for original: '{query}'")
                 
                 # Calculate results per query to maintain total count
                 results_per_query = max(1, num_results // len(rewritten_queries))
@@ -492,12 +491,11 @@ class BingSearchClient(RetrievalClientBase):
                 results = web_pages.get("value", [])
 
                 logger.info(f"Bing returned {len(results)} results")
-                print(f"[BING_SEARCH] Query '{search_query}': {len(results)} results")
 
                 # Convert to NLWeb format
                 nlweb_results = []
                 for result in results[:num_results]:
-                    nlweb_result = self._convert_bing_result_to_nlweb_format(result, site, 
+                    nlweb_result = self._convert_bing_result_to_nlweb_format(result, site,
                                                                             extract_product_info=extract_product_info)
                     nlweb_results.append(nlweb_result)
                 

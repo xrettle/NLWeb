@@ -9,6 +9,7 @@ from methods.generate_answer import GenerateAnswer
 from webserver.aiohttp_streaming_wrapper import AioHttpStreamingWrapper
 from core.retriever import get_vector_db_client
 from core.utils.utils import get_param
+from core.config import CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +19,11 @@ def setup_api_routes(app: web.Application):
     # Query endpoints
     app.router.add_get('/ask', ask_handler)
     app.router.add_post('/ask', ask_handler)
-    
+
     # Info endpoints
     app.router.add_get('/who', who_handler)
     app.router.add_get('/sites', sites_handler)
+    app.router.add_get('/config', config_handler)
 
 
 async def ask_handler(request: web.Request) -> web.Response:
@@ -184,27 +186,27 @@ async def who_handler(request: web.Request) -> web.Response:
 
 async def sites_handler(request: web.Request) -> web.Response:
     """Handle /sites endpoint to get available sites"""
-    
+
     try:
         # Get query parameters
         query_params = dict(request.query)
-        
+
         # Check if streaming is requested
         streaming = get_param(query_params, "streaming", str, "False")
         streaming = streaming not in ["False", "false", "0"]
-        
+
         # Create a retriever client
         retriever = get_vector_db_client(query_params=query_params)
-        
+
         # Get the list of sites
         sites = await retriever.get_sites()
-        
+
         # Prepare the response
         response_data = {
             "message-type": "sites",
             "sites": sites
         }
-        
+
         if streaming or request.get('is_sse', False):
             # Return as SSE
             response = web.StreamResponse(
@@ -222,7 +224,7 @@ async def sites_handler(request: web.Request) -> web.Response:
         else:
             # Return as JSON
             return web.json_response(response_data)
-            
+
     except Exception as e:
         logger.error(f"Error getting sites: {e}", exc_info=True)
         error_data = {
@@ -230,5 +232,23 @@ async def sites_handler(request: web.Request) -> web.Response:
             "error": f"Failed to get sites: {str(e)}"
         }
         return web.json_response(error_data, status=500)
+
+
+async def config_handler(request: web.Request) -> web.Response:
+    """Handle /config endpoint to get public configuration"""
+
+    try:
+        # Return only public configuration values
+        config_data = {
+            "nlweb_gateway": CONFIG.nlweb_gateway
+        }
+
+        return web.json_response(config_data)
+
+    except Exception as e:
+        logger.error(f"Error getting config: {e}", exc_info=True)
+        return web.json_response({
+            "error": f"Failed to get config: {str(e)}"
+        }, status=500)
 
 
