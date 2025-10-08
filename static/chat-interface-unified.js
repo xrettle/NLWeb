@@ -1097,9 +1097,6 @@ export class UnifiedChatInterface {
         return;
       }
 
-      // Sanitize the DOM element to remove any potentially harmful content
-      this.sanitizeDomElement(data._domElement);
-
       // Additional security validation: ensure the element came from our controlled process
       if (!data._domElement.classList.contains('search-results')) {
         console.error('DOM element does not have expected security marker class');
