@@ -1078,6 +1078,7 @@ export class UnifiedChatInterface {
 
     // Handle result messages specially - append the DOM element
     if (data.message_type === 'result' && data._domElement) {
+
       // Validate that _domElement is a safe DOM element we created
       if (!(data._domElement instanceof Element) || data._domElement.tagName !== 'DIV') {
         console.error('Invalid DOM element in result message');
@@ -1086,19 +1087,33 @@ export class UnifiedChatInterface {
 
       // Find or create the main search-results container
       let mainContainer = textDiv.querySelector('.search-results');
+
       if (!mainContainer) {
         // First result - append the whole container
-        // Clone the node to ensure it's safe
-        const safeElement = data._domElement.cloneNode(true);
-        textDiv.appendChild(safeElement);
-        mainContainer = safeElement;
+
+        // Instead of cloning, directly append the element
+        // The element was created in a temp div and extracted, so it's safe to move
+        textDiv.appendChild(data._domElement);
+        mainContainer = data._domElement;
+
+        // Now that elements are in the DOM, check if DataCommons needs attention
+        const dataCommonsElements = mainContainer.querySelectorAll('[data-needs-datacommons-init]');
+        if (dataCommonsElements.length > 0) {
+          // DataCommons web components should auto-initialize when in DOM
+          // No manual init needed
+        }
       } else {
         // Subsequent results - move children to existing container
-        while (data._domElement.firstChild) {
-          // Clone each child before appending to ensure safety
-          const safeChild = data._domElement.firstChild.cloneNode(true);
-          data._domElement.removeChild(data._domElement.firstChild);
-          mainContainer.appendChild(safeChild);
+
+        // Move children directly without cloning (they're safe since created in temp div)
+        const children = Array.from(data._domElement.children);
+        children.forEach(child => {
+          mainContainer.appendChild(child);
+        });
+
+        // Check for DataCommons elements
+        const dataCommonsElements = mainContainer.querySelectorAll('[data-needs-datacommons-init]');
+        if (dataCommonsElements.length > 0) {
         }
       }
 
@@ -1110,7 +1125,8 @@ export class UnifiedChatInterface {
         const score = (data.content && data.content[0]?.score) || 0;
 
         // Store the actual item container elements that were just added
-        const newItems = Array.from(mainContainer.querySelectorAll('.item-container')).slice(-data.content.length);
+        // Include both regular items and statistics containers
+        const newItems = Array.from(mainContainer.querySelectorAll('.item-container, .statistics-result-container')).slice(-data.content.length);
         this.state.currentNlwebBlock.renderedElements.push({ elements: newItems, score: score });
       }
     }
@@ -1804,24 +1820,10 @@ export class UnifiedChatInterface {
   debugConversation(conversationId) {
     const conversation = this.conversationManager?.findConversation(conversationId || this.state.conversationId);
     if (!conversation) {
-      console.log('No conversation found for ID:', conversationId || this.state.conversationId);
       return;
     }
 
-    console.log('=== CONVERSATION DEBUG ===');
-    console.log('Conversation ID:', conversation.id);
-    console.log('Total messages:', conversation.messages.length);
-    console.log('Message types:');
-    conversation.messages.forEach((msg, idx) => {
-      console.log(`  [${idx}] type: "${msg.type}", message_type: "${msg.message_type}", sender_type: "${msg.sender_type}"`);
-      if (msg.message_type === 'user') {
-        const query = typeof msg.content === 'object' ? msg.content.query : msg.content;
-        console.log(`       Query: "${query}"`);
-      }
-    });
-
     const userMessages = conversation.messages.filter(m => m.message_type === 'user');
-    console.log(`Found ${userMessages.length} user messages`);
   }
 
   async loadConversation(conversationId) {
@@ -2209,6 +2211,5 @@ window.debugConv = function() {
   if (window.nlwebChat && window.nlwebChat.chatInterface) {
     window.nlwebChat.chatInterface.debugConversation();
   } else {
-    console.log('Chat interface not found. Try window.nlwebChat.chatInterface');
   }
 };

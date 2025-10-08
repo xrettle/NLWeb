@@ -8,7 +8,11 @@ static_directory: ../static
 mode: development # or production or testing.
 
 # Default homepage path
-homepage: static/who.html
+homepage: static/index.html
+
+# NLWeb gateway endpoint for routing queries to sites
+# Used by who.html to construct links to site-specific queries
+nlweb_gateway: nlwm.azurewebsites.net
 
 # Additional optional configurations
 server:

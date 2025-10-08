@@ -364,6 +364,7 @@ class AppConfig:
         self.static_directory: str = self._get_config_value(data.get("static_directory"), "./static")
         self.mode: str = self._get_config_value(data.get("mode"), "production")
         self.homepage: str = self._get_config_value(data.get("homepage"), "static/index.html")
+        self.nlweb_gateway: str = self._get_config_value(data.get("nlweb_gateway"), "nlwm.azurewebsites.net")
         
         # Keep static directory relative to config directory, not base output directory
         if not os.path.isabs(self.static_directory):

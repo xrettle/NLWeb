@@ -71,11 +71,6 @@ def init():
                     )
 
                     _preloaded_modules[db_type] = CloudflareAutoRAGClient
-                elif db_type == "hnswlib":
-                    print(f"[RETRIEVER] Preloading hnswlib module for endpoint: {endpoint_name}")
-                    from retrieval_providers.hnswlib_client import HnswlibClient
-                    _preloaded_modules[db_type] = HnswlibClient
-                    print(f"[RETRIEVER] Successfully preloaded hnswlib module")
                 elif db_type == "bing_search":
                     from retrieval_providers.bing_search_client import BingSearchClient
                     _preloaded_modules[db_type] = BingSearchClient
@@ -94,7 +89,6 @@ _db_type_packages = {
     "postgres": ["psycopg", "psycopg[binary]>=3.1.12", "psycopg[pool]>=3.2.0", "pgvector>=0.4.0"],
     "shopify_mcp": ["aiohttp>=3.8.0"],
     "cloudflare_autorag": ['cloudflare>=4.3.1', "httpx>=0.28.1", "zon>=3.0.0", "markdown>=3.8.2", "beautifulsoup4>=4.13.4"],
-    "hnswlib": ["hnswlib>=0.7.0"],
     "bing_search": ["httpx>=0.28.1"],  # Bing search uses httpx for API calls
 }
 
@@ -131,8 +125,6 @@ def _ensure_package_installed(db_type: str):
                 __import__("elasticsearch")
             elif package_name == "psycopg":
                 __import__("psycopg")
-            elif package_name == "hnswlib":
-                __import__("hnswlib")
             else:
                 __import__(package_name)
             _installed_packages.add(package_name)
@@ -376,23 +368,24 @@ class VectorDBClient:
         self.endpoint_name = endpoint_name  # Store the endpoint name
         self.db_type = None  # Will be set based on the primary endpoint
         
-        # In development mode, check if query_params specifies a database endpoint
-        if CONFIG.is_development_mode() and self.query_params:
+        # Check if query_params specifies a database endpoint override
+        if self.query_params:
             # Check for 'db' or 'retrieval_backend' parameter
             param_endpoint = self.query_params.get('db') or self.query_params.get('retrieval_backend')
-            print(f"[RETRIEVER] Development mode - param_endpoint from query_params: {param_endpoint}")
+            if CONFIG.is_development_mode():
+                print(f"[RETRIEVER] Development mode - param_endpoint from query_params: {param_endpoint}")
             if param_endpoint:
                 # Handle case where param_endpoint might be a list
                 if isinstance(param_endpoint, list):
                     if len(param_endpoint) > 0:
                         param_endpoint = param_endpoint[0]
-                        logger.warning(f"Development mode: 'db' parameter was a list, using first element: {param_endpoint}")
+                        logger.warning(f"'db' parameter was a list, using first element: {param_endpoint}")
                     else:
-                        logger.error("Development mode: 'db' parameter is an empty list")
+                        logger.error("'db' parameter is an empty list")
                         param_endpoint = None
-                
+
                 if param_endpoint:
-                    logger.info(f"Development mode: Using database endpoint from params: {param_endpoint}")
+                    logger.info(f"Using database endpoint from params: {param_endpoint}")
                     endpoint_name = param_endpoint
         
         # If specific endpoint requested, validate and use it
@@ -500,8 +493,6 @@ class VectorDBClient:
             return True
         elif db_type == "cloudflare_autorag":
             return bool(config.api_key)
-        elif db_type == "hnswlib":
-            # HNSW requires a database path to the pre-built index
             return bool(config.database_path)
         elif db_type == "bing_search":
             # Bing search just needs to be enabled (API key can be hardcoded or from env)
@@ -576,11 +567,6 @@ class VectorDBClient:
                 elif db_type == "shopify_mcp":
                     from retrieval_providers.shopify_mcp import ShopifyMCPClient
                     client = ShopifyMCPClient(endpoint_name)
-                elif db_type == "hnswlib":
-                    print(f"[RETRIEVER] Creating hnswlib client for endpoint: {endpoint_name}")
-                    from retrieval_providers.hnswlib_client import HnswlibClient
-                    client = HnswlibClient(endpoint_name)
-                    print(f"[RETRIEVER] Successfully created hnswlib client")
                 elif db_type == "bing_search":
                     from retrieval_providers.bing_search_client import BingSearchClient
                     client = BingSearchClient(endpoint_name)
