@@ -5,7 +5,7 @@
 Simplified WHO ranking for site selection.
 """
 
-from core.utils.utils import log
+from core.utils.utils import log, build_nlweb_gateway_url
 from core.llm import ask_llm
 import asyncio
 import json
@@ -18,17 +18,18 @@ logger = get_configured_logger("who_ranking_engine")
 DEBUG_PRINT = False
 
 class WhoRanking:
-    
+
     EARLY_SEND_THRESHOLD = 59
     NUM_RESULTS_TO_SEND = 10
 
-    def __init__(self, handler, items, level="high"): # default to high level for WHO ranking
+    def __init__(self, handler, items, level="high"): # default to low level for WHO ranking
         logger.info(f"Initializing WHO Ranking with {len(items)} items")
         self.handler = handler
-        self.level = level  
+        self.level = level
         self.items = items
         self.num_results_sent = 0
         self.rankedAnswers = []
+
 
     def get_ranking_prompt(self, query, site_description):
         """Construct the WHO ranking prompt with the given query and site description."""
@@ -117,38 +118,44 @@ The site's description is: {site_description}
     async def sendAnswers(self, answers, force=False):
         """Send ranked sites to the client."""
         json_results = []
-        
+
         for result in answers:
             # Stop if we've already sent enough
             if self.num_results_sent + len(json_results) >= self.NUM_RESULTS_TO_SEND:
                 logger.info(f"Stopping at {len(json_results)} results to avoid exceeding limit of {self.NUM_RESULTS_TO_SEND}")
                 break
-            
+
             # Extract site type from schema_object
             schema_obj = result.get("schema_object", {})
             site_type = schema_obj.get("@type", "Website")
-            
+
+            # Get the optimized site-specific query (for display)
+            site_query = result["ranking"].get("query", self.handler.query)
+
+            # Build the complete URL with nlweb_gateway using the ORIGINAL user query
+            complete_url = build_nlweb_gateway_url(
+                result["url"],
+                self.handler.query,  # Always use original user query in URL
+                site_type
+            )
+
             result_item = {
                 "@type": site_type,  # Use the actual site type
-                "url": result["url"],
+                "url": complete_url,  # Use the complete URL with gateway
                 "name": result["name"],
                 "score": result["ranking"]["score"]
             }
-            
+
             # Include description if available
             if "description" in result["ranking"]:
                 result_item["description"] = result["ranking"]["description"]
-            
-            # Always include query field (required for WHO ranking)
-            if "query" in result["ranking"]:
-                result_item["query"] = result["ranking"]["query"]
-            else:
-                # Fallback to original query if no custom query provided
-                result_item["query"] = self.handler.query
-            
+
+            # Include optimized query field (for display purposes)
+            result_item["query"] = site_query
+
             json_results.append(result_item)
             result["sent"] = True
-        
+
         if json_results:
             # Use the new schema to create and auto-send the message
             create_assistant_result(json_results, handler=self.handler)

@@ -2,6 +2,7 @@ from core.baseHandler import NLWebHandler
 from core.retriever import search
 from core.whoRanking import WhoRanking
 from core.llm import ask_llm
+from core.utils.utils import build_nlweb_gateway_url
 from misc.logger.logging_config_helper import get_configured_logger
 import asyncio
 
@@ -10,8 +11,11 @@ import asyncio
 
 logger = get_configured_logger("who_handler")
 
-DEFAULT_NLWEB_ENDPOINT = "https://nlwm.azurewebsites.net/ask"
 ENABLE_QUERY_FANOUT = False
+
+# Cache for vector database lookup results
+# Key: query string, Value: list of retrieved items
+_vector_db_cache = {}
 
 class WhoHandler (NLWebHandler) :
 
@@ -27,29 +31,9 @@ class WhoHandler (NLWebHandler) :
         # Keep prev_queries for context if provided
         super().__init__(query_params, http_handler)
     
-    def _build_nlweb_url(self, site_url, site_type=None):
-        """Helper function to build the complete NLWEB URL with all parameters."""
-        from urllib.parse import quote
-
-        params = []
-        params.append(f"site={site_url}")
-
-        # Add the user's query
-        if self.query:
-            params.append(f"query={quote(self.query)}")
-
-        # Check if it's a Shopify site and add db parameter
-        if site_type in ['ShopifyStore', 'Shopify'] or 'shopify' in site_url.lower():
-            params.append("db=shopify_mcp")
-
-        # Add tool parameter to go directly to search
-        params.append("tool=search")
-
-        # Construct the full URL
-        return f"{DEFAULT_NLWEB_ENDPOINT}?{'&'.join(params)}"
 
     async def send_message(self, message):
-        """Override send_message to ensure URLs point to /ask endpoint with site parameter."""
+        """Override send_message to ensure URLs point to gateway endpoint with site parameter."""
         # Check if message contains results with URLs
         if isinstance(message, dict):
             # Handle messages with 'content' field (results)
@@ -57,10 +41,10 @@ class WhoHandler (NLWebHandler) :
                 for result in message['content']:
                     if 'url' in result:
                         url = result['url']
-                        # If URL doesn't start with http:// or https://, convert to /ask endpoint
+                        # If URL doesn't start with http:// or https://, convert to gateway URL
                         if not url.startswith(('http://', 'https://')):
                             site_type = result.get('@type', '')
-                            result['url'] = self._build_nlweb_url(url, site_type)
+                            result['url'] = build_nlweb_gateway_url(url, self.query, site_type)
                             logger.debug(f"Modified URL from '{url}' to '{result['url']}'")
 
             # Handle single result messages
@@ -68,7 +52,7 @@ class WhoHandler (NLWebHandler) :
                 url = message['url']
                 if not url.startswith(('http://', 'https://')):
                     site_type = message.get('@type', '')
-                    message['url'] = self._build_nlweb_url(url, site_type)
+                    message['url'] = build_nlweb_gateway_url(url, self.query, site_type)
                     logger.debug(f"Modified URL from '{url}' to '{message['url']}'")
 
         # Call parent class's send_message with modified message
@@ -107,12 +91,21 @@ class WhoHandler (NLWebHandler) :
         return valid_queries
     
     async def whoRetrieveInt(self, query):
-        items = await search(
-                query, 
-                site='nlweb_sites',  # Use the sites collection
-                query_params=self.query_params,
-                num_results=20
-            )
+        # Check cache first
+        if query in _vector_db_cache:
+            logger.debug(f"Cache hit for query: {query}")
+            items = _vector_db_cache[query]
+        else:
+            logger.debug(f"Cache miss for query: {query}")
+            items = await search(
+                    query,
+                    site='nlweb_sites',  # Use the sites collection
+                    query_params=self.query_params,
+                    num_results=20
+                )
+            # Store in cache
+            _vector_db_cache[query] = items
+
         for item in items:
             if (item not in self.final_retrieved_items):
                 self.final_retrieved_items.append(item) 

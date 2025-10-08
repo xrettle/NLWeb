@@ -39,24 +39,27 @@ export class ChatUICommon {
    * Render multiple items/results
    */
   renderItems(items) {
-    if (!items || items.length === 0) return '';
-    
+    if (!items || items.length === 0) {
+      return '';
+    }
+
     // Don't sort - keep items in the order they were received
     const sortedItems = [...items];
-    
+
     // Create a container for all results
     const resultsContainer = document.createElement('div');
     resultsContainer.className = 'search-results';
-    
+
     // Render each item using JsonRenderer
-    sortedItems.forEach(item => {
+    sortedItems.forEach((item, index) => {
       // Use JsonRenderer to create the item HTML
       const itemElement = this.jsonRenderer.createJsonItemHtml(item);
       resultsContainer.appendChild(itemElement);
     });
-    
+
     // Return the outer HTML of the container
-    return resultsContainer.outerHTML;
+    const html = resultsContainer.outerHTML;
+    return html;
   }
 
   /**
@@ -316,6 +319,7 @@ export class ChatUICommon {
         
       case 'result':
         if (data.content) {
+
           // Only render the items from THIS message
           let currentMessageItems = [];
           if (Array.isArray(data.content)) {
@@ -328,11 +332,13 @@ export class ChatUICommon {
 
           // Create DOM element for just these items
           const itemsHtml = this.renderItems(currentMessageItems);
+
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = itemsHtml;
 
           // Return the DOM element instead of modifying bubble
           const resultElement = tempDiv.querySelector('.search-results');
+
           if (resultElement) {
             // Store the element in the data for the caller to append
             data._domElement = resultElement;
@@ -421,12 +427,19 @@ export class ChatUICommon {
         break;
         
       case 'multi_site_complete':
-        // Rerank results for diversity when all sites complete
-        if (allResults && allResults.length > 0 && context.selectedSite === 'all') {
+        // Skip reranking for datacommons site to preserve StatisticalResult rendering
+        const hasStatisticalResults = allResults && allResults.some(item =>
+          item && item['@type'] === 'StatisticalResult'
+        );
+
+        // Rerank results for diversity when all sites complete (but not for datacommons/StatisticalResults)
+        if (allResults && allResults.length > 0 && context.selectedSite === 'all' && !hasStatisticalResults) {
           const rerankedResults = this.rerankResults(allResults);
           allResults = rerankedResults;
           bubble.innerHTML = messageContent + this.renderItems(allResults);
-        } else {
+        } else if (allResults && allResults.length > 0) {
+          // For datacommons or when not reranking, just render without reranking
+          bubble.innerHTML = messageContent + this.renderItems(allResults);
         }
         break;
         
@@ -513,9 +526,16 @@ export class ChatUICommon {
             const sanitizedHTML = DOMPurify.sanitize(htmlContent, {
               ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
                              'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
-                             'a', 'img', 'strong', 'em', 'code', 'pre', 'br', 'hr'],
+                             'a', 'img', 'strong', 'em', 'code', 'pre', 'br', 'hr',
+                             // Add DataCommons web components
+                             'datacommons-bar', 'datacommons-highlight', 'datacommons-gauge',
+                             'datacommons-line', 'datacommons-map', 'datacommons-pie',
+                             'datacommons-ranking', 'datacommons-scatter', 'datacommons-slider'],
               ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title',
-                             'width', 'height', 'colspan', 'rowspan'],
+                             'width', 'height', 'colspan', 'rowspan',
+                             // Add DataCommons attributes (camelCase versions)
+                             'header', 'place', 'places', 'variable', 'variables',
+                             'parentPlace', 'childPlaceType', 'parentplace', 'childplacetype'],
               ALLOW_DATA_ATTR: false
             });
             statsContainer.innerHTML = sanitizedHTML;
@@ -749,13 +769,6 @@ export class ChatUICommon {
    * Render Cricket Statistics with formatted table
    */
   renderStatisticalResult(item) {
-    // Ensure DataCommons script is loaded
-    if (!document.querySelector('script[src*="datacommons.org/datacommons.js"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://datacommons.org/datacommons.js';
-      script.async = true;
-      document.head.appendChild(script);
-    }
 
     // Create container for the statistics visualization
     const container = document.createElement('div');
@@ -765,16 +778,54 @@ export class ChatUICommon {
     // Insert the HTML content directly
     if (item.html) {
       container.innerHTML = item.html;
+    } else {
     }
 
-    // Force re-initialization of Data Commons components after a delay
-    setTimeout(() => {
-      if (window.datacommons && window.datacommons.init) {
-        window.datacommons.init();
-      }
-    }, 100);
+    // Add a flag to the container so we can initialize DataCommons later when it's in the DOM
+    container.dataset.needsDatacommonsInit = 'true';
+
+    // Ensure DataCommons script is loaded (this will be called after container is in DOM)
+    this.ensureDataCommonsScript();
 
     return container;
+  }
+
+  ensureDataCommonsScript() {
+    const existingScript = document.querySelector('script[src*="datacommons.org/datacommons.js"]');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = 'https://datacommons.org/datacommons.js';
+      script.async = true;
+      script.onload = () => {
+
+        // Check what methods are available
+        if (window.datacommons) {
+          // DataCommons web components auto-initialize when added to DOM
+          // We might not need to call init() at all
+
+          // Try to manually trigger any initialization if available
+          if (typeof window.datacommons.init === 'function') {
+            window.datacommons.init();
+          } else if (typeof window.datacommons.initialize === 'function') {
+            window.datacommons.initialize();
+          } else {
+          }
+        } else {
+        }
+      };
+      document.head.appendChild(script);
+    } else {
+      // Script already exists, check if DataCommons is available
+      if (window.datacommons) {
+        // DataCommons web components should auto-initialize when in DOM
+      } else {
+        // If script exists but hasn't loaded yet, wait for it
+        if (existingScript.readyState === 'loading') {
+          existingScript.addEventListener('load', () => {
+          });
+        }
+      }
+    }
   }
 
   renderCricketStatistics(item) {
