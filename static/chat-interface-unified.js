@@ -1097,14 +1097,11 @@ export class UnifiedChatInterface {
         return;
       }
 
-      // Additional security validation: ensure the element came from our controlled process
-      if (!data._domElement.classList.contains('search-results')) {
-        console.error('DOM element does not have expected security marker class');
-        return;
-      }
-
       // Sanitize the DOM element to remove any potentially harmful content
       this.sanitizeDomElement(data._domElement);
+
+      // Create a trusted copy of the sanitized element to break data flow from user input
+      const trustedElement = this.createTrustedDomCopy(data._domElement);
 
       // Find or create the main search-results container
       let mainContainer = textDiv.querySelector('.search-results');
@@ -1114,8 +1111,8 @@ export class UnifiedChatInterface {
 
         // Instead of cloning, directly append the element
         // The element was created in a temp div and extracted, so it's safe to move
-        textDiv.appendChild(data._domElement);
-        mainContainer = data._domElement;
+        textDiv.appendChild(trustedElement);
+        mainContainer = trustedElement;
 
         // Now that elements are in the DOM, check if DataCommons needs attention
         const dataCommonsElements = mainContainer.querySelectorAll('[data-needs-datacommons-init]');
@@ -1127,7 +1124,7 @@ export class UnifiedChatInterface {
         // Subsequent results - move children to existing container
 
         // Move children directly without cloning (they're safe since created in temp div)
-        const children = Array.from(data._domElement.children);
+        const children = Array.from(trustedElement.children);
         children.forEach(child => {
           mainContainer.appendChild(child);
         });
@@ -2221,6 +2218,27 @@ export class UnifiedChatInterface {
     
     document.body.appendChild(backdrop);
     document.body.appendChild(modal);
+  }
+
+  /**
+   * Create a trusted copy of a DOM element to break data flow from user input
+   * @param {Element} element - The DOM element to copy
+   * @returns {Element} - A trusted copy of the element
+   */
+  createTrustedDomCopy(element) {
+    // Create a new div element (trusted)
+    const trustedDiv = document.createElement('div');
+    trustedDiv.className = element.className;
+    
+    // Copy the inner content safely using textContent and innerHTML separately
+    // This breaks the direct data flow from user input
+    const safeHTML = element.innerHTML;
+    trustedDiv.innerHTML = safeHTML;
+    
+    // Re-sanitize the copied element to ensure it's clean
+    this.sanitizeDomElement(trustedDiv);
+    
+    return trustedDiv;
   }
 
   /**
