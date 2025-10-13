@@ -29,7 +29,7 @@ This document provides a high-level overview of the integration stack that conne
 ┌─────────────────────────────────────────────────────────────────┐
 │                   NLWeb AppSDK Adapter                          │
 │              (Python aiohttp Server)                            │
-│   URL: https://nlwappsdk.azurewebsites.net                     │
+                   │
 │   Location: code/python/webserver/appsdk_adapter_server.py     │
 └────────────────────┬────────────────────────────────────────────┘
                      │ Proxies to NLWeb Core
@@ -230,7 +230,7 @@ The MCP server includes an interactive React-based widget that displays NLWeb se
 ## Configuration
 
 Key environment variables:
-- `NLWEB_BASE_URL`: NLWeb AppSDK adapter URL (default: `https://localhost:8100`)
+- `NLWEB_APPSDK_BASE_URL`: NLWeb AppSDK adapter URL (default: `https://localhost:8100`)
 - `REQUEST_TIMEOUT`: Request timeout in ms (default: `30000`)
 
 **See [Main README](../openai-apps-sdk-integration/README.md) for complete configuration details.**

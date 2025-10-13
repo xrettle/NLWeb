@@ -6,7 +6,7 @@ This directory contains a Model Context Protocol (MCP) server that exposes the N
 
 - Node.js 18+
 - npm, pnpm, or yarn for dependency management
-- Running NLWeb backend (default: https://nlwappsdk.azurewebsites.net)
+- Running NLWeb backend (default: localhost)
 
 ## Install dependencies
 
@@ -60,8 +60,8 @@ Then add to ChatGPT: `https://your-ngrok-url.ngrok-free.app/mcp`
 Set environment variables to customize behavior:
 
 ```bash
-# NLWeb backend URL
-export NLWEB_BASE_URL="http://localhost:8080"
+# NLWeb AppSDK backend URL
+export NLWEB_APPSDK_BASE_URL="http://localhost:8100"
 
 # Request timeout in milliseconds
 export REQUEST_TIMEOUT="60000"

@@ -12,7 +12,7 @@ import { z } from "zod";
 import fetch from "node-fetch";
 
 // Configuration
-const NLWEB_BASE_URL = process.env.NLWEB_APPSDK_BASE_URL || "https://localhost:8100";
+const NLWEB_APPSDK_BASE_URL = process.env.NLWEB_APPSDK_BASE_URL || "https://localhost:8100";
 const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || "30000", 10);
 
 // Widget configuration (following pizzaz pattern)
@@ -98,7 +98,7 @@ async function callNLWebAsk(params: NLWebAskInput): Promise<NLWebResponse> {
     queryParams.set("mode", params.mode);
   }
   
-  const url = `${NLWEB_BASE_URL}/ask?${queryParams.toString()}`;
+  const url = `${NLWEB_APPSDK_BASE_URL}/ask?${queryParams.toString()}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -390,7 +390,7 @@ httpServer.on("clientError", (err: Error, socket) => {
 
 httpServer.listen(port, () => {
   console.log(`NLWeb MCP server listening on http://localhost:${port}`);
-  console.log(`  NLWEB_BASE_URL: ${NLWEB_BASE_URL}`);
+  console.log(`  NLWEB_APPSDK_BASE_URL: ${NLWEB_APPSDK_BASE_URL}`);
   console.log(`  REQUEST_TIMEOUT: ${REQUEST_TIMEOUT}ms`);
   console.log(`  SSE stream: GET http://localhost:${port}${ssePath}`);
   console.log(`  Message post endpoint: POST http://localhost:${port}${postPath}?sessionId=...`);

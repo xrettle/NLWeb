@@ -212,7 +212,7 @@ Replace `YOUR-CDN-URL` with your actual CDN URL.
      --resource-group your-rg \
      --name nlweb-mcp-server \
      --settings \
-       NLWEB_BASE_URL="https://nlwappsdk.azurewebsites.net" \
+       NLWEB_APPSDK_BASE_URL=<TODO> \
        REQUEST_TIMEOUT="30000" \
        PORT="8000"
    ```
@@ -248,7 +248,7 @@ Replace `YOUR-CDN-URL` with your actual CDN URL.
 
 3. **Set environment variables:**
    ```bash
-   export NLWEB_BASE_URL="https://nlwappsdk.azurewebsites.net"
+   export NLWEB_APPSDK_BASE_URL=<TODO>
    export REQUEST_TIMEOUT="30000"
    export PORT="8000"
    ```
@@ -378,7 +378,7 @@ When you update the widget:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NLWEB_BASE_URL` | `https://nlwappsdk.azurewebsites.net` | NLWeb backend API URL |
+| `NLWEB_APPSDK_BASE_URL` | `<TODO>` | NLWeb APPSDK backend API URL |
 | `REQUEST_TIMEOUT` | `30000` | Timeout for NLWeb requests (ms) |
 | `PORT` | `8000` | Server port |
 

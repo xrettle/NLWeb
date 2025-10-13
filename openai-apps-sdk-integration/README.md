@@ -41,7 +41,7 @@ The MCP servers in this demo highlight how each tool can light up widgets by com
 
 - Node.js 18+
 - npm or pnpm
-- Running NLWeb backend (default: https://nlwappsdk.azurewebsites.net)
+- Running NLWeb backend (default: localhost:8100)
 
 ## Install dependencies
 
@@ -139,13 +139,13 @@ Edit `src/nlweb-list/index.jsx` to modify how results are displayed. After chang
 ### Modify the Server
 
 Edit `nlweb_server_node/src/server.ts` to:
-- Change the NLWeb backend URL (`NLWEB_BASE_URL`)
+- Change the NLWeb AppSDK backend URL (`NLWEB_APPSDK_BASE_URL`)
 - Customize tool parameters
 - Add additional tools or widgets
 
 ## Environment Variables
 
-- `NLWEB_BASE_URL` - NLWeb backend API URL (default: `https://nlwappsdk.azurewebsites.net`)
+- `NLWEB_APPSDK_BASE_URL` - NLWeb AppSDK backend API URL (default: `localhost:8100`)
 - `REQUEST_TIMEOUT` - Timeout for NLWeb requests in ms (default: `30000`)
 - `PORT` - Server port for HTTP mode (default: `8000`)
 
