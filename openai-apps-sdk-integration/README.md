@@ -3,11 +3,8 @@
 [![MIT License](https://img.shields.io/ba```bash
 cd nlweb_server_node
 
-# For stdio transport (MCP Inspector)
+# Start MCP Server
 npm start
-
-# For HTTP/SSE transport (ChatGPT)
-npm run start:http
 
 # Run test suite
 npm run test
@@ -89,11 +86,8 @@ The assets are exposed at [`http://localhost:4444`](http://localhost:4444) with 
 ```bash
 cd nlweb_server_node
 
-# For stdio transport (MCP Inspector)
+# For MCP Server
 npm start
-
-# For HTTP/SSE transport (ChatGPT)
-npm run start
 
 # Run test suite
 npm run test
@@ -117,7 +111,7 @@ npm run serve  # Serves at http://localhost:4444
 **Terminal 2 - Start MCP server:**
 ```bash
 cd nlweb_server_node
-npm run start  # Runs on port 8000
+npm start  # Runs on port 8000
 ```
 
 **Terminal 3 - Expose with ngrok:**
