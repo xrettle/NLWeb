@@ -18,26 +18,8 @@ If you prefer pnpm or yarn, adjust the command accordingly.
 
 ## Run the server
 
-### Option 1: stdio transport (for ChatGPT/Claude Desktop)
-
 ```bash
 npm start
-```
-
-This runs the server over stdio, compatible with:
-- MCP Inspector
-- ChatGPT developer mode connectors
-- Claude Desktop
-
-**Test with MCP Inspector:**
-```bash
-npx @modelcontextprotocol/inspector npm start
-```
-
-### Option 2: HTTP transport (for web testing)
-
-```bash
-npm run start:http
 ```
 
 This runs the server on **HTTP port 8000** (configurable via `PORT` env variable).
@@ -52,7 +34,7 @@ This runs the server on **HTTP port 8000** (configurable via `PORT` env variable
 
 ```bash
 # Terminal 1: Start the server
-npm run start
+npm start
 
 # Terminal 2: Run the automated test suite
 npm run test
