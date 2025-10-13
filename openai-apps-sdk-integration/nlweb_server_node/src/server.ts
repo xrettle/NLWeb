@@ -12,7 +12,7 @@ import { z } from "zod";
 import fetch from "node-fetch";
 
 // Configuration
-const NLWEB_BASE_URL = process.env.NLWEB_BASE_URL || "https://nlwappsdk.azurewebsites.net";
+const NLWEB_BASE_URL = process.env.NLWEB_APPSDK_BASE_URL || "https://localhost:8100";
 const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || "30000", 10);
 
 // Widget configuration (following pizzaz pattern)
