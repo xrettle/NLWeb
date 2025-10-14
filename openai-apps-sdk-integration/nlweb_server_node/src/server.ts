@@ -255,7 +255,8 @@ function createNLWebServer(): Server {
           title: "NLWeb Search",
           description: 
             "Query NLWeb to search and analyze information from configured data sources. " +
-            "Returns structured results (Schema.org data) or visualizations (charts, maps, rankings, embedded content).",
+            "Returns structured results (Schema.org data) or visualizations (charts, maps, rankings, embedded content). " +
+            "Use mode='list' by default unless user specifically asks to 'generate' or 'summarize'.",
           inputSchema: {
             type: "object",
             properties: {
@@ -270,7 +271,7 @@ function createNLWebServer(): Server {
               mode: {
                 type: "string",
                 enum: ["list", "summarize", "generate"],
-                description: "Response generation mode",
+                description: "Response generation mode. Use 'list' (default) to show structured results. Only use 'summarize' if user explicitly asks for a summary, or 'generate' if user asks to generate new content.",
                 default: "list",
               },
               prev: {

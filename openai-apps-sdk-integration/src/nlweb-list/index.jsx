@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PlusCircle, Star, FileText, MapPin } from "lucide-react";
+import { PlusCircle, Star, FileText, MapPin, ExternalLink } from "lucide-react";
 import { useWidgetProps } from "../use-widget-props";
 import { NLWebHeader, NLWebContainer, NLWebEmptyState } from "../shared/NLWebComponents";
 // Import visualization components for hybrid rendering
@@ -56,6 +56,7 @@ function ResultItem({ result, index, isLast }) {
   const subtitle = getResultSubtitle(result);
   const image = getResultImage(result);
   const rating = getResultRating(result);
+  const url = result.url || result.schema_object?.url || null;
   const fullDescription = result.description || result.schema_object?.description || "";
   const hasFullDescription = fullDescription && fullDescription.length > 50;
 
@@ -73,11 +74,21 @@ function ResultItem({ result, index, isLast }) {
         <div className="py-3 pr-3 min-w-0 w-full sm:w-3/5">
           <div className="flex items-center gap-3">
             {image ? (
-              <img
-                src={image}
-                alt={title}
-                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover ring ring-black/5"
-              />
+              url ? (
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={image}
+                    alt={title}
+                    className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover ring ring-black/5 hover:ring-blue-500 transition-all cursor-pointer"
+                  />
+                </a>
+              ) : (
+                <img
+                  src={image}
+                  alt={title}
+                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover ring ring-black/5"
+                />
+              )
             ) : (
               <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg bg-black/5 flex items-center justify-center">
                 <Icon className="h-5 w-5 text-black/40" strokeWidth={1.5} />
@@ -87,9 +98,21 @@ function ResultItem({ result, index, isLast }) {
               {index + 1}
             </div>
             <div className="min-w-0 sm:pl-1 flex flex-col items-start h-full w-full">
-              <div className="font-medium text-sm sm:text-md truncate max-w-[40ch]">
-                {title}
-              </div>
+              {url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-sm sm:text-md truncate max-w-[40ch] text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
+                >
+                  {title}
+                  <ExternalLink className="h-3 w-3 inline-block flex-shrink-0" />
+                </a>
+              ) : (
+                <div className="font-medium text-sm sm:text-md truncate max-w-[40ch]">
+                  {title}
+                </div>
+              )}
               <div className="mt-1 sm:mt-0.25 flex items-center gap-3 text-black/70 text-sm">
                 {rating && (
                   <div className="flex items-center gap-1">
