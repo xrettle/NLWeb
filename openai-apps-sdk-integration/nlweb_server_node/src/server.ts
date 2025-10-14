@@ -12,7 +12,7 @@ import { z } from "zod";
 import fetch from "node-fetch";
 
 // Configuration
-const NLWEB_APPSDK_BASE_URL = process.env.NLWEB_APPSDK_BASE_URL || "https://localhost:8100";
+const NLWEB_APPSDK_BASE_URL = process.env.NLWEB_APPSDK_BASE_URL || "http://localhost:8100";
 const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || "30000", 10);
 
 // Widget configuration (following pizzaz pattern)
@@ -35,7 +35,8 @@ function widgetMeta(widget: NLWebWidget) {
   } as const;
 }
 
-const nlwebWidget: NLWebWidget = {
+// Widget for regular Schema.org results
+const nlwebListWidget: NLWebWidget = {
   id: "nlweb-list",
   title: "NLWeb Results",
   templateUri: "ui://widget/nlweb-list.html",
@@ -46,8 +47,49 @@ const nlwebWidget: NLWebWidget = {
 <link rel="stylesheet" href="http://localhost:4444/nlweb-list-2d2b.css">
 <script type="module" src="http://localhost:4444/nlweb-list-2d2b.js"></script>
   `.trim(),
-    responseText: "Rendered a NLWeb result list!"
 };
+
+// Widget for all visualizations (charts, maps, embedded content, etc.)
+const nlwebVisualizationWidget: NLWebWidget = {
+  id: "nlweb-visualization",
+  title: "NLWeb Visualizations",
+  templateUri: "ui://widget/nlweb-visualization.html",
+  invoking: "Creating visualization",
+  invoked: "Visualized data",
+  html: `
+<div id="nlweb-datacommons-root"></div>
+<link rel="stylesheet" href="http://localhost:4444/nlweb-datacommons-2d2b.css">
+<script type="module" src="http://localhost:4444/nlweb-datacommons-2d2b.js"></script>
+  `.trim(),
+};
+
+// Determine which widget to use based on response content
+function selectWidget(response: NLWebResponse): NLWebWidget {
+  const results = response.structuredContent?.results || [];
+  
+  // Check if this is a visualization response (has html/script for rendering)
+  // This works for Data Commons, custom charts, embedded visualizations, etc.
+  const hasVisualization = results.some(result => 
+    result.visualizationType ||  // Explicitly marked as visualization
+    result.html ||                // Has HTML content to render
+    result.script                 // Has script to execute
+  );
+  
+  // Debug logging
+  console.log('Widget Selection Debug:', {
+    resultCount: results.length,
+    hasVisualization,
+    firstResult: results[0] ? {
+      hasVisualizationType: !!results[0].visualizationType,
+      hasHtml: !!results[0].html,
+      hasScript: !!results[0].script,
+      type: results[0]['@type']
+    } : null,
+    selectedWidget: hasVisualization ? 'visualization' : 'list'
+  });
+  
+  return hasVisualization ? nlwebVisualizationWidget : nlwebListWidget;
+}
 
 // Input schema for nlweb_ask tool (following pizzaz pattern)
 const NLWebAskInputSchema = z.object({
@@ -123,6 +165,21 @@ async function callNLWebAsk(params: NLWebAskInput): Promise<NLWebResponse> {
 
     const data = await response.json() as NLWebResponse;
     
+    // Debug: Log the full response structure
+    console.log('=== NLWeb API Response ===');
+    console.log('structuredContent keys:', Object.keys(data.structuredContent || {}));
+    console.log('results count:', data.structuredContent?.results?.length || 0);
+    console.log('content count:', data.content?.length || 0);
+    if (data.structuredContent?.results?.length > 0) {
+      console.log('First result keys:', Object.keys(data.structuredContent.results[0]));
+      console.log('First result @type:', data.structuredContent.results[0]['@type']);
+      console.log('First result has html:', !!data.structuredContent.results[0].html);
+      console.log('First result has script:', !!data.structuredContent.results[0].script);
+      console.log('First result has visualizationType:', !!data.structuredContent.results[0].visualizationType);
+      console.log('First result (full):', JSON.stringify(data.structuredContent.results[0], null, 2));
+    }
+    console.log('========================');
+    
     // Validate response structure
     if (!data.structuredContent || !data.content) {
       throw new Error("Invalid response format from NLWeb adapter");
@@ -157,30 +214,31 @@ function createNLWebServer(): Server {
     }
   );
 
-  // Register the UI widget resource (following pizzaz pattern)
+  // Register both UI widget resources (following pizzaz pattern)
+  const allWidgets = [nlwebListWidget, nlwebVisualizationWidget];
+  
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     return {
-      resources: [
-        {
-          uri: nlwebWidget.templateUri,
-          mimeType: "text/html+skybridge",
-          name: nlwebWidget.title,
-          description: `${nlwebWidget.title} widget markup - renders NLWeb visualization blocks`,
-          _meta: widgetMeta(nlwebWidget),
-        },
-      ],
+      resources: allWidgets.map(widget => ({
+        uri: widget.templateUri,
+        mimeType: "text/html+skybridge",
+        name: widget.title,
+        description: `${widget.title} widget markup`,
+        _meta: widgetMeta(widget),
+      })),
     };
   });
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    if (request.params.uri === nlwebWidget.templateUri) {
+    const widget = allWidgets.find(w => w.templateUri === request.params.uri);
+    if (widget) {
       return {
         contents: [
           {
-            uri: nlwebWidget.templateUri,
+            uri: widget.templateUri,
             mimeType: "text/html+skybridge",
-            text: nlwebWidget.html,
-            _meta: widgetMeta(nlwebWidget),
+            text: widget.html,
+            _meta: widgetMeta(widget),
           },
         ],
       };
@@ -188,16 +246,17 @@ function createNLWebServer(): Server {
     throw new Error(`Resource not found: ${request.params.uri}`);
   });
 
-  // Register the nlweb tool (following pizzaz pattern)
+  // Register the nlweb tool - single tool that returns appropriate widget based on results
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
         {
-          name: nlwebWidget.id,
-          title: nlwebWidget.title,
+          name: "nlweb-search",
+          title: "NLWeb Search",
           description: 
             "Query NLWeb to search and analyze information from configured data sources. " +
-            "Returns structured visualization blocks (maps, rankings, highlights) from Schema.org-marked websites.",
+            "Returns structured results (Schema.org data) or visualizations (charts, maps, rankings, embedded content). " +
+            "Use mode='list' by default unless user specifically asks to 'generate' or 'summarize'.",
           inputSchema: {
             type: "object",
             properties: {
@@ -207,12 +266,12 @@ function createNLWebServer(): Server {
               },
               site: {
                 type: "string",
-                description: "Optional site to search (e.g., 'datacommons.org')",
+                description: "Optional site to search (e.g., 'datacommons'). Use the bare site name without domain extension (e.g., 'datacommons' not 'datacommons.org', 'seriouseats' not 'seriouseats.com')",
               },
               mode: {
                 type: "string",
                 enum: ["list", "summarize", "generate"],
-                description: "Response generation mode",
+                description: "Response generation mode. Use 'list' (default) to show structured results. Only use 'summarize' if user explicitly asks for a summary, or 'generate' if user asks to generate new content.",
                 default: "list",
               },
               prev: {
@@ -223,35 +282,40 @@ function createNLWebServer(): Server {
             },
             required: ["query"],
           },
-          _meta: widgetMeta(nlwebWidget),
+          // Use nlweb-list widget by default (will be overridden dynamically)
+          _meta: widgetMeta(nlwebListWidget),
         },
       ],
     };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name === nlwebWidget.id) {
+    if (request.params.name === "nlweb-search") {
       try {
         const params = NLWebAskInputSchema.parse(request.params.arguments);
         const response = await callNLWebAsk(params);
+
+        // Dynamically select widget based on response type
+        const widget = selectWidget(response);
 
         // Create embedded widget resource (following pizzaz pattern)
         const widgetResource = {
           type: "resource" as const,
           resource: {
-            uri: nlwebWidget.templateUri,
+            uri: widget.templateUri,
             mimeType: "text/html+skybridge",
-            text: nlwebWidget.html,
+            text: widget.html,
           },
         };
 
-        // Return AppSDK-compatible response with all required metadata
+        // Return AppSDK-compatible response with structuredContent passed to UI via toolOutput
+        // The structuredContent becomes available to the UI via useWidgetProps() as window.openai.toolOutput
         return {
           content: response.content,
           structuredContent: response.structuredContent,
           _meta: {
             "openai.com/widget": widgetResource,
-            ...widgetMeta(nlwebWidget),
+            ...widgetMeta(widget),
           },
         };
       } catch (error) {
