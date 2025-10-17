@@ -102,9 +102,9 @@ async def get_gemini_embeddings(
             # non-blocking
             result = await asyncio.wait_for(
                 asyncio.to_thread(
-                    lambda: genai.embed_content(
+                    lambda t=text: genai.embed_content(
                         model=model,
-                        content=text,
+                        content=t,
                         task_type=task_type
                     )
                 ),
