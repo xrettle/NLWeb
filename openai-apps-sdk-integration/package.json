@@ -45,7 +45,7 @@
     "lucide-react": "^0.536.0",
     "mapbox-gl": "^3.14.0",
     "mapbox-gl.css": "link:mapbox-gl/dist/mapbox-gl.css",
-    "mermaid": "^11.9.0",
+    "mermaid": "^11.10.0",
     "embla-carousel": "^8.0.0",
     "embla-carousel-react": "^8.0.0",
     "partial-json": "^0.1.7",
