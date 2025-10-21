@@ -32,10 +32,12 @@ The MCP servers in this demo highlight how each tool can light up widgets by com
 
 ## Repository structure
 
-- `src/nlweb-list/` – NLWeb results list widget source code
+- `src/nlweb-list/` – Hybrid NLWeb widget (handles both Schema.org results and visualizations)
+- `src/nlweb-datacommons/` – Visualization widget components (charts, maps, rankings)
+- `src/shared/` – Shared UI components used by both widgets
 - `assets/` – Generated HTML, JS, and CSS bundles after running the build step
 - `nlweb_server_node/` – MCP server implemented with the official TypeScript SDK
-- `build-all.mts` – Vite build orchestrator that produces hashed bundles for the widget
+- `build-all.mts` – Vite build orchestrator that produces hashed bundles for widgets
 
 ## Prerequisites
 
@@ -125,6 +127,95 @@ For example: `https://<custom_endpoint>.ngrok-free.app/mcp`
 
 For production deployment, see [nlweb_server_node/DEPLOYMENT.md](nlweb_server_node/DEPLOYMENT.md).
 
+## Widget Architecture
+
+### Hybrid Widget Design
+
+The NLWeb integration uses a **hybrid widget architecture** where the `nlweb-list` widget automatically detects and renders both:
+
+1. **Schema.org Structured Data** - Traditional search results (restaurants, articles, places)
+2. **Interactive Visualizations** - Data Commons charts, maps, rankings, and embedded components
+
+This design solves ChatGPT's widget caching behavior, where the client caches which widget to load based on the tool definition. Instead of trying to dynamically switch widgets (which ChatGPT may ignore), we use a single smart widget that adapts to the data it receives.
+
+### How It Works
+
+```
+┌──────────────────────────────────────────────────┐
+│  ChatGPT loads nlweb-list widget                 │
+└──────────────────────────────────────────────────┘
+                     ↓
+┌──────────────────────────────────────────────────┐
+│  MCP Server returns structuredContent.results    │
+│  Each result has: @type, name, url, etc.         │
+│  OR: visualizationType, html, script, etc.       │
+└──────────────────────────────────────────────────┘
+                     ↓
+┌──────────────────────────────────────────────────┐
+│  Widget detects result type:                     │
+│  - Has html/script/visualizationType?            │
+│    → Use VisualizationBlock component            │
+│  - Regular Schema.org data?                      │
+│    → Use ResultItem component                    │
+└──────────────────────────────────────────────────┘
+                     ↓
+┌──────────────────────────────────────────────────┐
+│  VisualizationBlock:                             │
+│  1. Loads Data Commons script if needed          │
+│  2. Injects result.html into DOM                 │
+│  3. Web components self-initialize               │
+│  4. Renders interactive charts/maps              │
+└──────────────────────────────────────────────────┘
+```
+
+### Key Benefits
+
+- **No caching issues** - Single widget handles both data types
+- **Backward compatible** - Existing Schema.org results still work
+- **Future-proof** - Can mix visualizations and regular results in same response
+- **Simpler architecture** - No complex dynamic widget selection needed
+
+### Component Structure
+
+```
+src/
+├── nlweb-list/           # Main hybrid widget
+│   ├── index.jsx         # Detects and routes to correct renderer
+│   └── nlweb-list.css    # Styles for Schema.org results
+├── nlweb-datacommons/    # Visualization components
+│   ├── index.jsx         # Standalone visualization widget (backup)
+│   ├── VisualizationBlock.jsx  # Individual viz renderer
+│   └── nlweb-datacommons.css   # Visualization styles
+└── shared/               # Shared components
+    └── NLWebComponents.jsx  # Header, Container, EmptyState
+```
+
+### Data Format Examples
+
+**Schema.org Result:**
+```json
+{
+  "@type": "Restaurant",
+  "name": "Joe's Pizza",
+  "description": "Best pizza in town",
+  "image": "https://...",
+  "rating": 4.5,
+  "url": "https://..."
+}
+```
+
+**Visualization Result:**
+```json
+{
+  "@type": "StatisticalResult",
+  "visualizationType": "map",
+  "html": "<datacommons-map header='...' ...></datacommons-map>",
+  "script": "<script src='https://datacommons.org/datacommons.js'></script>",
+  "places": ["geoId/06"],
+  "variables": ["Percent_Person_WithDiabetes"]
+}
+```
+
 ## Development
 
 ### Customize the Widget
@@ -143,16 +234,87 @@ Edit `nlweb_server_node/src/server.ts` to:
 - Customize tool parameters
 - Add additional tools or widgets
 
+### Debug Logging
+
+The integration includes comprehensive debug logging:
+
+**Server-side (MCP):**
+- Response structure from NLWeb adapter
+- Result counts and types
+- Widget selection logic
+- Field presence checks (html, script, visualizationType)
+
+**Client-side (Widget):**
+- Widget initialization
+- Data reception
+- Visualization detection
+- HTML injection process
+
+Check browser console and server logs when troubleshooting.
+
 ## Environment Variables
 
-- `NLWEB_APPSDK_BASE_URL` - NLWeb AppSDK backend API URL (default: `localhost:8100`)
+- `NLWEB_APPSDK_BASE_URL` - NLWeb AppSDK backend API URL (default: `http://localhost:8100`)
 - `REQUEST_TIMEOUT` - Timeout for NLWeb requests in ms (default: `30000`)
 - `PORT` - Server port for HTTP mode (default: `8000`)
 
-## Contributing
+## Troubleshooting
 
-You are welcome to open issues or submit PRs to improve this app, however, please note that we may not review all suggestions.
+### Visualizations Not Rendering
 
-## License
+If Data Commons visualizations show as HTML code instead of interactive components:
 
-This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
+1. **Check all services are running:**
+   ```bash
+   # NLWeb Core (port 8000)
+   curl http://localhost:8000/ask?query=test
+   
+   # AppSDK Adapter (port 8100)
+   curl http://localhost:8100/ask?query=test
+   
+   # Widget Server (port 4444)
+   curl http://localhost:4444/nlweb-list-2d2b.js
+   ```
+
+2. **Check browser console for errors:**
+   - Look for "🎨 NLWeb List Widget" log showing `hasVisualizations: true`
+   - Look for "✅ Injecting HTML for visualization" messages
+   - Check for script loading errors
+
+3. **Check MCP server logs:**
+   - Should show "Widget Selection Debug" with `hasVisualization: true`
+   - Should show result structure with `html`, `script`, `visualizationType` fields
+
+4. **Verify Data Commons script is loading:**
+   - Open browser DevTools → Network tab
+   - Look for `datacommons.js` being loaded from `datacommons.org`
+
+5. **Common issues:**
+   - **Wrong protocol:** URL should be `http://localhost:8100` not `https://`
+   - **AppSDK adapter not running:** Start with `python -m webserver.appsdk_adapter_server`
+   - **Results not in structuredContent.results:** Check adapter transformation
+   - **Widget cache:** Hard refresh ChatGPT (Cmd+Shift+R / Ctrl+Shift+R)
+
+### Testing the Full Stack
+
+Run the test script to verify the adapter is working:
+
+```bash
+cd openai-apps-sdk-integration
+./test_adapter_response.sh
+```
+
+This will test:
+- Connectivity to port 8100
+- Response structure validation
+- Presence of visualization fields
+- First result inspection
+
+### Service Startup Order
+
+For best results, start services in this order:
+
+1. **NLWeb Core** (port 8000 or hosted)
+2. **AppSDK Adapter** (port 8100 or hosted) - transforms NLWeb responses
+3. **Widget Server** (port 4444) - serves static assets
+4. **MCP Server** (port 8000) - connects to AppSDK adapter

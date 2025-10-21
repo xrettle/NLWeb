@@ -16,6 +16,7 @@ const GLOBAL_CSS_LIST = [path.resolve("src/index.css")];
 
 const targets: string[] = [
   "nlweb-list",
+  "nlweb-datacommons",
 ];
 const builtNames: string[] = [];
 

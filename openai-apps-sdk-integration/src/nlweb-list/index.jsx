@@ -1,7 +1,10 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PlusCircle, Star, FileText, MapPin } from "lucide-react";
+import { PlusCircle, Star, FileText, MapPin, ExternalLink } from "lucide-react";
 import { useWidgetProps } from "../use-widget-props";
+import { NLWebHeader, NLWebContainer, NLWebEmptyState } from "../shared/NLWebComponents";
+// Import visualization components for hybrid rendering
+import VisualizationBlock from "../nlweb-datacommons/VisualizationBlock";
 
 function getResultIcon(result) {
   const type = result["@type"] || "";
@@ -53,6 +56,7 @@ function ResultItem({ result, index, isLast }) {
   const subtitle = getResultSubtitle(result);
   const image = getResultImage(result);
   const rating = getResultRating(result);
+  const url = result.url || result.schema_object?.url || null;
   const fullDescription = result.description || result.schema_object?.description || "";
   const hasFullDescription = fullDescription && fullDescription.length > 50;
 
@@ -70,11 +74,21 @@ function ResultItem({ result, index, isLast }) {
         <div className="py-3 pr-3 min-w-0 w-full sm:w-3/5">
           <div className="flex items-center gap-3">
             {image ? (
-              <img
-                src={image}
-                alt={title}
-                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover ring ring-black/5"
-              />
+              url ? (
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={image}
+                    alt={title}
+                    className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover ring ring-black/5 hover:ring-blue-500 transition-all cursor-pointer"
+                  />
+                </a>
+              ) : (
+                <img
+                  src={image}
+                  alt={title}
+                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover ring ring-black/5"
+                />
+              )
             ) : (
               <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg bg-black/5 flex items-center justify-center">
                 <Icon className="h-5 w-5 text-black/40" strokeWidth={1.5} />
@@ -84,9 +98,21 @@ function ResultItem({ result, index, isLast }) {
               {index + 1}
             </div>
             <div className="min-w-0 sm:pl-1 flex flex-col items-start h-full w-full">
-              <div className="font-medium text-sm sm:text-md truncate max-w-[40ch]">
-                {title}
-              </div>
+              {url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-sm sm:text-md truncate max-w-[40ch] text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
+                >
+                  {title}
+                  <ExternalLink className="h-3 w-3 inline-block flex-shrink-0" />
+                </a>
+              ) : (
+                <div className="font-medium text-sm sm:text-md truncate max-w-[40ch]">
+                  {title}
+                </div>
+              )}
               <div className="mt-1 sm:mt-0.25 flex items-center gap-3 text-black/70 text-sm">
                 {rating && (
                   <div className="flex items-center gap-1">
@@ -142,60 +168,94 @@ function App() {
   const results = props?.results || [];
   const query = props?.query || "";
   const metadata = props?.metadata || {};
+  const [loadedScripts, setLoadedScripts] = useState(new Set());
+
+  // Detect if results contain visualizations
+  const hasVisualizations = results.some(r => r.visualizationType || r.html || r.script);
+
+  // Load required scripts for visualizations
+  useEffect(() => {
+    if (!hasVisualizations) return;
+
+    results.forEach((result) => {
+      if (result.script && !loadedScripts.has(result.script)) {
+        const scriptTag = document.createElement("div");
+        scriptTag.innerHTML = result.script;
+        const scriptElement = scriptTag.querySelector("script");
+        
+        if (scriptElement && scriptElement.src) {
+          const existingScript = document.querySelector(`script[src="${scriptElement.src}"]`);
+          if (!existingScript) {
+            const newScript = document.createElement("script");
+            newScript.src = scriptElement.src;
+            newScript.async = true;
+            document.head.appendChild(newScript);
+            setLoadedScripts((prev) => new Set(prev).add(result.script));
+            console.log('✅ Loaded script:', scriptElement.src);
+          }
+        }
+      }
+    });
+  }, [results, hasVisualizations]);
+
+  console.log('🎨 NLWeb List Widget:', { 
+    resultsCount: results.length, 
+    hasVisualizations,
+    firstResultType: results[0]?.['@type']
+  });
 
   return (
-    <div className="antialiased w-full text-black px-4 pb-2 border border-black/10 rounded-2xl sm:rounded-3xl overflow-hidden bg-white">
-      <div className="max-w-full">
-        <div className="flex flex-row items-center gap-4 sm:gap-4 border-b border-black/5 py-4">
-          <div
-            className="sm:w-18 w-16 aspect-square rounded-xl bg-cover bg-center bg-blue-500/10 flex items-center justify-center"
-          >
-            <FileText className="h-8 w-8 text-blue-600" strokeWidth={1.5} />
-          </div>
-          <div>
-            <div className="text-base sm:text-xl font-medium">
-              {query || "NLWeb Results"}
-            </div>
-            <div className="text-sm text-black/60">
-              {results.length} result{results.length !== 1 ? 's' : ''} found
-            </div>
-          </div>
-          <div className="flex-auto hidden sm:flex justify-end pr-2">
-            <button
-              type="button"
-              className="cursor-pointer inline-flex items-center rounded-full bg-blue-600 text-white px-4 py-1.5 sm:text-md text-sm font-medium hover:opacity-90 active:opacity-100"
-            >
-              Save Results
-            </button>
-          </div>
-        </div>
-        <div className="min-w-full text-sm flex flex-col">
-          {results.map((result, i) => (
+    <NLWebContainer>
+      <NLWebHeader 
+        query={query}
+        resultCount={results.length}
+        onSave={() => console.log('Save results')}
+      />
+      
+      <div className="min-w-full text-sm flex flex-col">
+        {results.map((result, i) => {
+          // If result has visualization data, use VisualizationBlock
+          if (result.visualizationType || result.html || result.script) {
+            return (
+              <VisualizationBlock
+                key={i}
+                result={result}
+                index={i}
+                displayMode="inline"
+                isLast={i === results.length - 1}
+              />
+            );
+          }
+          // Otherwise use regular ResultItem for Schema.org data
+          return (
             <ResultItem
               key={result.id || result.url || i}
               result={result}
               index={i}
               isLast={i === results.length - 1}
             />
-          ))}
-          {results.length === 0 && (
-            <div className="py-6 text-center text-black/60">
-              No results found.
-            </div>
-          )}
-        </div>
-        <div className="sm:hidden px-0 pt-2 pb-2">
-          <button
-            type="button"
-            className="w-full cursor-pointer inline-flex items-center justify-center rounded-full bg-blue-600 text-white px-4 py-2 font-medium hover:opacity-90 active:opacity-100"
-          >
-            Save Results
-          </button>
-        </div>
+          );
+        })}
+        {results.length === 0 && (
+          <NLWebEmptyState />
+        )}
       </div>
-    </div>
+      
+      <div className="sm:hidden px-0 pt-2 pb-2">
+        <button
+          type="button"
+          className="w-full cursor-pointer inline-flex items-center justify-center rounded-full bg-blue-600 text-white px-4 py-2 font-medium hover:opacity-90 active:opacity-100"
+        >
+          Save Results
+        </button>
+      </div>
+    </NLWebContainer>
   );
 }
+
+// Export for build system
+export { App };
+export default App;
 
 const rootElement = document.getElementById("nlweb-list-root");
 if (rootElement) {
